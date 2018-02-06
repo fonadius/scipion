@@ -207,8 +207,8 @@ void kernel4(const float2* __restrict__ imgs, float2* correlations, int xDim, in
 				float2 tmp2 = imgs[tmp2Offset + pixelIndex];
 				float2 res;
 				// FIXME why conjugate?
-				res.x = (tmp.x*tmp2.x) + (tmp.y*tmp2.y);
-				res.y = (tmp.y*tmp2.x) - (tmp.x*tmp2.y);
+				res.x = ((tmp.x*tmp2.x) + (tmp.y*tmp2.y))*(yDim*yDim);
+				res.y = ((tmp.y*tmp2.x) - (tmp.x*tmp2.y))*(yDim*yDim);
 				correlations[counter*xDim*yDim + pixelIndex] = res*a;
 				counter++;
 			}
