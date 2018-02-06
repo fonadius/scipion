@@ -61,19 +61,19 @@ void createPlanFFT(size_t Xdim, size_t Ydim, size_t Ndim, size_t Zdim, bool forw
 	int rdist = Xdim*Ydim*Zdim;	    // --- Distance between batches
 	int fdist = Xfdim*Ydim*Zdim;
 
-	std::cout << "create FFT plan " << Xdim << " " << Ydim << " " << Zdim << " " << Ndim << " " << NRANK << " " << Xfdim << std::endl;
+//	std::cout << "create FFT plan " << Xdim << " " << Ydim << " " << Zdim << " " << Ndim << " " << NRANK << " " << Xfdim << std::endl;
 
 	if(forward){
 		gpuErrchkFFT(cufftPlanMany(plan, NRANK, nr, nr, rstride, rdist, nf, fstride, fdist, CUFFT_R2C, Ndim));
 	}else{
-		printf("nr %p %p %p nf %p %p %p\n", nr1, nr2, nr3, nf1, nf2, nf3);
-		printf("%p %d %p %p  dist: %d %d ndim: %d\n",plan, NRANK, nr, nf, fdist, rdist, Ndim);
+//		printf("nr %p %p %p nf %p %p %p\n", nr1, nr2, nr3, nf1, nf2, nf3);
+//		printf("%p %d %p %p  dist: %d %d ndim: %d\n",plan, NRANK, nr, nf, fdist, rdist, Ndim);
 		gpuErrchkFFT(cufftPlanMany(plan, NRANK, nr, nf, fstride, fdist, nr, rstride, rdist, CUFFT_C2R, Ndim));
 	}
-	size_t workSize = 0;
-	cufftGetSize(*plan, &workSize);
-	printf("Estimated size: %lu\n", workSize/1048576);
-	fflush(stdout);
+//	size_t workSize = 0;
+//	cufftGetSize(*plan, &workSize);
+//	printf("Estimated size: %lu\n", workSize/1048576);
+//	fflush(stdout);
 
 }
 
@@ -144,9 +144,9 @@ void GpuMultidimArrayAtGpu<float>::fft(GpuMultidimArrayAtGpu< std::complex<float
 {
 
 	int Xfdim=(Xdim/2)+1;
-	std::cout << "target size: " << fourierTransform.Xdim << " " << fourierTransform.Ydim << " " << fourierTransform.Zdim  << " " << fourierTransform.Ndim << std::endl;
+//	std::cout << "target size: " << fourierTransform.Xdim << " " << fourierTransform.Ydim << " " << fourierTransform.Zdim  << " " << fourierTransform.Ndim << std::endl;
 	fourierTransform.resize(Xfdim,Ydim,Zdim,Ndim);
-	std::cout << "target size after resize: " << fourierTransform.Xdim << " " << fourierTransform.Ydim << " " << fourierTransform.Zdim  << " " << fourierTransform.Ndim << std::endl;
+//	std::cout << "target size after resize: " << fourierTransform.Xdim << " " << fourierTransform.Ydim << " " << fourierTransform.Zdim  << " " << fourierTransform.Ndim << std::endl;
 
 	int positionReal=0;
 	int positionFFT=0;
@@ -157,16 +157,16 @@ void GpuMultidimArrayAtGpu<float>::fft(GpuMultidimArrayAtGpu< std::complex<float
 	auxNdim=Ndim;
 
 	if(myhandle.ptr!=NULL) {
-		std::cout << "branch 1" << std::endl;
+//		std::cout << "branch 1" << std::endl;
 		NdimNew = Ndim;
 	}
 
 	while(aux>0){
-		std::cout << "branch2" << std::endl;
+//		std::cout << "branch2" << std::endl;
 		GpuMultidimArrayAtGpu<cufftReal> auxInFFT;
 		GpuMultidimArrayAtGpu<cufftComplex> auxOutFFT;
 		if(NdimNew!=Ndim){
-			std::cout << "branch 3" << std::endl;
+//			std::cout << "branch 3" << std::endl;
 			auxInFFT.resize(Xdim,Ydim,Zdim,NdimNew);
 			gpuCopyFromGPUToGPU((cufftReal*)&d_data[positionReal], auxInFFT.d_data, Xdim*Ydim*Zdim*NdimNew*sizeof(cufftReal));
 			auxOutFFT.resize(Xfdim,Ydim,Zdim,NdimNew);
@@ -175,13 +175,13 @@ void GpuMultidimArrayAtGpu<float>::fft(GpuMultidimArrayAtGpu< std::complex<float
 		cufftHandle *planFptr = NULL;
 		cufftHandle *planAuxFptr = NULL;
 		if(auxNdim!=NdimNew){
-			std::cout << "branch 4" << std::endl;
+//			std::cout << "branch 4" << std::endl;
 			planAuxFptr = new cufftHandle;
 			createPlanFFT(Xdim, Ydim, NdimNew, Zdim, true, planAuxFptr);
 		}else{
-			std::cout << "branch 5" << std::endl;
+//			std::cout << "branch 5" << std::endl;
 			if(myhandle.ptr == NULL){
-				std::cout << "branch 6" << std::endl;
+//				std::cout << "branch 6" << std::endl;
 				myhandle.ptr = planFptr = new cufftHandle;
 				createPlanFFT(Xdim, Ydim, NdimNew, Zdim, true, planFptr);
 			}
@@ -189,21 +189,21 @@ void GpuMultidimArrayAtGpu<float>::fft(GpuMultidimArrayAtGpu< std::complex<float
 		}
 
 		if(auxNdim==NdimNew){
-			std::cout << "branch 7" << std::endl;
+//			std::cout << "branch 7" << std::endl;
 			if(NdimNew!=Ndim){
-				std::cout << "branch 8" << std::endl;
+//				std::cout << "branch 8" << std::endl;
 				gpuErrchkFFT(cufftExecR2C(*planFptr, auxInFFT.d_data, auxOutFFT.d_data));
 			}else{
-				std::cout << "branch 9" << std::endl;
+//				std::cout << "branch 9" << std::endl;
 				gpuErrchkFFT(cufftExecR2C(*planFptr, (cufftReal*)&d_data[positionReal], (cufftComplex*)&fourierTransform.d_data[positionFFT]));
 			}
 		}else{
-			std::cout << "branch 10" << std::endl;
+//			std::cout << "branch 10" << std::endl;
 			if(NdimNew!=Ndim){
-				std::cout << "branch 11" << std::endl;
+//				std::cout << "branch 11" << std::endl;
 				gpuErrchkFFT(cufftExecR2C(*planAuxFptr, auxInFFT.d_data, auxOutFFT.d_data));
 			}else{
-				std::cout << "branch 12" << std::endl;
+//				std::cout << "branch 12" << std::endl;
 				gpuErrchkFFT(cufftExecR2C(*planAuxFptr, (cufftReal*)&d_data[positionReal], (cufftComplex*)&fourierTransform.d_data[positionFFT]));
 			}
 		}
@@ -211,7 +211,7 @@ void GpuMultidimArrayAtGpu<float>::fft(GpuMultidimArrayAtGpu< std::complex<float
 		gpuErrchk(cudaDeviceSynchronize());
 
 		if(NdimNew!=Ndim){
-			std::cout << "branch 13" << std::endl;
+//			std::cout << "branch 13" << std::endl;
 			gpuCopyFromGPUToGPU(auxOutFFT.d_data, (cufftComplex*)&fourierTransform.d_data[positionFFT], Xfdim*Ydim*Zdim*NdimNew*sizeof(cufftComplex));
 			auxOutFFT.clear();
 			auxInFFT.clear();
@@ -223,11 +223,11 @@ void GpuMultidimArrayAtGpu<float>::fft(GpuMultidimArrayAtGpu< std::complex<float
 		positionFFT+=(NdimNew*Xfdim*Ydim*Zdim);
 		aux-=NdimNew;
 		if(aux<NdimNew)
-			std::cout << "branch 14" << std::endl;
+//			std::cout << "branch 14" << std::endl;
 			NdimNew=aux;
 
 		if (NULL != planAuxFptr) {
-			std::cout << "branch 15" << std::endl;
+//			std::cout << "branch 15" << std::endl;
 			cufftDestroy(*planAuxFptr); // destroy if created
 		}
 

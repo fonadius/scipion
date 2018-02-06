@@ -176,9 +176,9 @@ void ProgMovieAlignmentCorrelationGPU::loadData(const MetaData& movie,
 //				frame.data.yxdim * sizeof(float));
 	}
 
-	Image<float> aaaa(paddedLineLength, frame.data.ydim, 1, noOfImgs);
-	aaaa.data.data = imgs;
-	aaaa.write("images.vol");
+//	Image<float> aaaa(paddedLineLength, frame.data.ydim, 1, noOfImgs);
+//	aaaa.data.data = imgs;
+//	aaaa.write("images.vol");
 
 
 
@@ -190,24 +190,24 @@ void ProgMovieAlignmentCorrelationGPU::loadData(const MetaData& movie,
 //	FIXME normalization has to be done using original img size, i.e frame.data.xdim*frame.data.ydim
 //	******************
 
-	MultidimArray<std::complex<double> > V(1, 1, newYdim, newFFTXDim);
-	for (size_t i = 0; i < (newFFTXDim*newYdim); i++) {
-		V.data[i].real() = tmpResult[i].real() / (frame.data.xdim*frame.data.ydim);
-		V.data[i].imag() = tmpResult[i].imag() / (frame.data.xdim*frame.data.ydim);
-	}
-	Image<double> aaa(newFFTXDim, newYdim, 1, noOfImgs);
-	for (size_t i = 0; i < (newFFTXDim*newYdim*noOfImgs); i++) {
-		double d = tmpResult[i].real() / (frame.data.xdim*frame.data.ydim);
-		if (d < 3) aaa.data[i] = d;
-	}
-	aaa.write("fftFromGPU.vol");
-	std::cout << "normalization done" << std::endl;
-	Image<double> yyy (newXdim, newYdim, 1, 1);
-	FourierTransformer transformer;
-	std::cout << "about to do IFFT" << std::endl;
-	transformer.inverseFourierTransform(V, yyy.data);
-	std::cout << "IFFT done" << std::endl;
-	yyy.write("filteredCroppedInputGPU0.vol");
+//	MultidimArray<std::complex<double> > V(1, 1, newYdim, newFFTXDim);
+//	for (size_t i = 0; i < (newFFTXDim*newYdim); i++) {
+//		V.data[i].real() = tmpResult[i].real() / (frame.data.xdim*frame.data.ydim);
+//		V.data[i].imag() = tmpResult[i].imag() / (frame.data.xdim*frame.data.ydim);
+//	}
+//	Image<double> aaa(newFFTXDim, newYdim, 1, noOfImgs);
+//	for (size_t i = 0; i < (newFFTXDim*newYdim*noOfImgs); i++) {
+//		double d = tmpResult[i].real() / (frame.data.xdim*frame.data.ydim);
+//		if (d < 3) aaa.data[i] = d;
+//	}
+//	aaa.write("fftFromGPU.vol");
+//	std::cout << "normalization done" << std::endl;
+//	Image<double> yyy (newXdim, newYdim, 1, 1);
+//	FourierTransformer transformer;
+//	std::cout << "about to do IFFT" << std::endl;
+//	transformer.inverseFourierTransform(V, yyy.data);
+//	std::cout << "IFFT done" << std::endl;
+//	yyy.write("filteredCroppedInputGPU0.vol");
 
 
 	// 16785408 X:2049 Y:4096
@@ -236,14 +236,14 @@ void ProgMovieAlignmentCorrelationGPU::computeShifts(size_t N,
 	size_t frameydim = 4096; // FIXME
 
 
-	size_t newFFTXDim = newXdim/2+1;
-	int noOfCorrelations = (N * (N-1)/2);
-	Image<float> ffts(newFFTXDim, newYdim, 1, noOfCorrelations);
-	for (size_t i = 0; i < newFFTXDim*newYdim*noOfCorrelations; i++) {
-		double d = result2[i].real() / (framexdim*frameydim*newFFTXDim*newYdim);
-		if (std::abs(d) < 3) ffts.data[i] = d;
-	}
-	ffts.write("correlationFFTGPU.vol");
+//	size_t newFFTXDim = newXdim/2+1;
+//	int noOfCorrelations = (N * (N-1)/2);
+//	Image<float> ffts(newFFTXDim, newYdim, 1, noOfCorrelations);
+//	for (size_t i = 0; i < newFFTXDim*newYdim*noOfCorrelations; i++) {
+//		double d = result2[i].real() / (framexdim*frameydim*newFFTXDim*newYdim);
+//		if (std::abs(d) < 3) ffts.data[i] = d;
+//	}
+//	ffts.write("correlationFFTGPU.vol");
 
 	int idx = 0;
 	for (size_t i = 0; i < N - 1; ++i) {
@@ -253,7 +253,7 @@ void ProgMovieAlignmentCorrelationGPU::computeShifts(size_t N,
 			for (size_t t = 0; t < newYdim * newXdim; t++) {
 				Mcorr.data[t] = result1[offset + t];
 			}
-			CenterFFT(Mcorr, true);
+//			CenterFFT(Mcorr, true);
 			Mcorr.setXmippOrigin();
 			bestShift(Mcorr, bX(idx), bY(idx), NULL, maxShift);
 			if (verbose)
@@ -288,10 +288,10 @@ void ProgMovieAlignmentCorrelationGPU::computeShifts(size_t N,
 //		std::cout << "IFFT done" << std::endl;
 //		CenterFFT(yyy.data, true);
 //		yyy.write("correlationIFFTGPU" + SSTR(img) + ".vol");
-		Image<float>tmp(newXdim, newYdim, 1, noOfCorrelations);
-		tmp.data.data = result1;
-//		CenterFFT(tmp.data, true);
-		tmp.write("correlationIFFTGPU.vol");
+//		Image<float>tmp(newXdim, newYdim, 1, noOfCorrelations);
+//		tmp.data.data = result1;
+////		CenterFFT(tmp.data, true);
+//		tmp.write("correlationIFFTGPU.vol");
 //	}
 
 
