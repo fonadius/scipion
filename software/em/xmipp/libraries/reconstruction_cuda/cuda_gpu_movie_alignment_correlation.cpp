@@ -130,20 +130,20 @@ void kernel1(float* imgs, size_t oldX, size_t oldY, int noOfImages, size_t newX,
 
 
 	// crop FFT
-	float* d_cropped;
+	float2* d_cropped;
 	size_t newFFTX = newX / 2 + 1;
-	size_t noOfCroppedFloats = noOfImages * newFFTX * newY * 2; // complex
+	size_t noOfCroppedFloats = noOfImages * newFFTX * newY ; // complex
 
 	// copy filter
 	float* d_filter;
 	gpuMalloc((void**) &d_filter,newFFTX * newY*sizeof(float));
 	gpuErrchk(cudaMemcpy(d_filter, filter, newFFTX * newY*sizeof(float), cudaMemcpyHostToDevice));
 
-	gpuMalloc((void**) &d_cropped,noOfCroppedFloats*sizeof(float));
-	cudaMemset(d_cropped, 0.f, noOfCroppedFloats*sizeof(float));
+	gpuMalloc((void**) &d_cropped,noOfCroppedFloats*sizeof(float2));
+	cudaMemset(d_cropped, 0.f, noOfCroppedFloats*sizeof(float2));
 	dim3 dimBlock(BLOCK_DIM_X, BLOCK_DIM_X);
 	dim3 dimGrid(ceil(newFFTX/(float)dimBlock.x), ceil(newY/(float)dimBlock.y));
-	kernel2<<<dimGrid, dimBlock>>>((float2*)resultingFFT.d_data,(float2*) d_cropped, noOfImages, resultingFFT.Xdim, resultingFFT.Ydim, newFFTX, newY, d_filter);
+	kernel2<<<dimGrid, dimBlock>>>((float2*)resultingFFT.d_data, d_cropped, noOfImages, resultingFFT.Xdim, resultingFFT.Ydim, newFFTX, newY, d_filter);
 	cudaFree(d_filter);
 	resultingFFT.clear();
 	imagesGPU.d_data = NULL; // pointed to resultingFFT.d_data, which was cleared above
@@ -153,14 +153,15 @@ void kernel1(float* imgs, size_t oldX, size_t oldY, int noOfImages, size_t newX,
 
 // copy out results
 //	std::cout << "about to copy to host" << std::endl;
-	result = new std::complex<float>[noOfImages*newFFTX*newY]();
+//	result = new std::complex<float>[noOfImages*newFFTX*newY]();
 //	printf("result: %p\nFFTs: %p\n", result, resultingFFT.d_data );
 //	resultingFFT.copyToCpu(result);
 //	printf ("about to copy to host: %p %p %d\n", result, d_cropped, noOfCroppedFloats*sizeof(float));
-	gpuErrchk(cudaMemcpy((void*)result, (void*)d_cropped, noOfCroppedFloats*sizeof(float), cudaMemcpyDeviceToHost));
-	cudaFree(d_cropped);
+//	gpuErrchk(cudaMemcpy((void*)result, (void*)d_cropped, noOfCroppedFloats*sizeof(float), cudaMemcpyDeviceToHost));
+//	cudaFree(d_cropped);
 //	std::cout << "copy to host done" << std::endl;
-	resultingFFT.d_data = NULL;
+	result = (std::complex<float>*) d_cropped;
+//	resultingFFT.d_data = NULL;
 //	std::cout << "No of elems: " << resultingFFT.nzyxdim  << " X:" << resultingFFT.Xdim << " Y:" << resultingFFT.Ydim<< std::endl;
 
 //	cudaMemGetInfo(&free, &total);
@@ -232,8 +233,9 @@ void kernel3(float maxShift, size_t noOfImgs, const std::complex<float>* imgs, s
 
 	size_t noOfPixels = noOfImgs * fftXdim * fftYdim;
 	float2* d_imgs;
-	gpuMalloc((void**) &d_imgs, noOfPixels*sizeof(float2));
-	cudaMemcpy((void*)d_imgs, (void*)imgs, noOfPixels*sizeof(float2), cudaMemcpyHostToDevice);
+	d_imgs = (float2*) imgs;
+//	gpuMalloc((void**) &d_imgs, noOfPixels*sizeof(float2));
+//	cudaMemcpy((void*)d_imgs, (void*)imgs, noOfPixels*sizeof(float2), cudaMemcpyHostToDevice);
 
 //	cudaMemGetInfo(&free, &total);
 //	printf("Mem: %lu %lu\n", free/1024/1024, total);
