@@ -192,8 +192,9 @@ void ProgMovieAlignmentCorrelationGPU::loadData(const MetaData& movie,
 
 	MultidimArray<std::complex<double> > V(1, 1, newYdim, newFFTXDim);
 	for (size_t i = 0; i < (newFFTXDim*newYdim); i++) {
-		V.data[i].real() = tmpResult[i].real() / (frame.data.xdim*frame.data.ydim);
-		V.data[i].imag() = tmpResult[i].imag() / (frame.data.xdim*frame.data.ydim);
+		float real = tmpResult[i].real() / (frame.data.xdim*frame.data.ydim);
+		float imag = tmpResult[i].imag() / (frame.data.xdim*frame.data.ydim);
+        V.data[i] = std::complex<float>(real, imag);
 	}
 	Image<double> aaa(newFFTXDim, newYdim, 1, noOfImgs);
 	for (size_t i = 0; i < (newFFTXDim*newYdim*noOfImgs); i++) {
