@@ -234,6 +234,8 @@ def addCppLibrary(env, name, dirs=[], tars=[], untarTargets=['configure'], patte
     # FIXME: There must be a key in env dictionary that breaks the compilation. Please find it to make it more beautiful
     env2 = Environment()
     env2['ENV']['PATH'] = env['ENV']['PATH']
+    
+    _libs.append(['cuFFTAdvisor'])
 
     mpiArgs = {}
     if mpi:
@@ -323,6 +325,8 @@ def addCppLibraryCuda(env, name, dirs=[], tars=[], untarTargets=['configure'], p
     # FIXME: There must be a key in env dictionary that breaks the compilation. Please find it to make it more beautiful
     env2 = Environment()
     env2['ENV']['PATH'] = env['ENV']['PATH']
+    
+    _libs.append(['cuFFTAdvisor'])
 
     mpiArgs = {}
     if mpi:
@@ -337,7 +341,7 @@ def addCppLibraryCuda(env, name, dirs=[], tars=[], untarTargets=['configure'], p
 
     # AJ
     elif cuda:
-        _libs.append(['cudart', 'cublas', 'cufft', 'curand', 'cusparse', 'nvToolsExt'])
+        _libs.append(['cudart', 'cublas', 'cufft', 'cuFFTAdvisor', 'curand', 'cusparse', 'nvToolsExt'])
         _incs.append(env['NVCC_INCLUDE'])
         _libpath.append(env['NVCC_LIBDIR'])
         mpiArgs = {'CC': env['NVCC'], 'CXX': env['NVCC'], 'LINK': env['LINKERFORPROGRAMS']}
@@ -542,8 +546,9 @@ def addProgram(env, name, src=None, pattern=None, installDir=None,
     libs = libs or []
     libPathsCopy = libPaths + [Dir('lib').abspath, Dir('#software/lib').abspath]
     incsCopy = list(incs) or []
+    libs.append(['cuFFTAdvisor'])
     if cuda or nvcc:
-        libs += ['cudart', 'cublas', 'cufft', 'curand', 'cusparse', 'nvToolsExt']
+        libs += ['cudart', 'cublas', 'cufft', 'cuFFTAdvisor', 'curand', 'cusparse', 'nvToolsExt']
         incsCopy += [env['NVCC_INCLUDE']]
         libPathsCopy += [env['NVCC_LIBDIR']]
     sources = []

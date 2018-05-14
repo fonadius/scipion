@@ -113,9 +113,10 @@ void ProgMovieAlignmentCorrelationGPU::loadData(const MetaData& movie,
 	gainF.data.resize(gain());
 	darkF.data.resize(dark());
 
+	int noOfImgs = nlast - nfirst + 1;
 
 
-	int paddedSize = findNext2357Multiple(newXdim);
+	int paddedSize = getBestSize(noOfImgs, newXdim);//results->at(0)->transform->X;
 	int padding = paddedSize - newXdim;
 	printf("using padding %d (%d-%d)\n", padding, paddedSize, newXdim);
 
@@ -136,7 +137,6 @@ void ProgMovieAlignmentCorrelationGPU::loadData(const MetaData& movie,
 
 
 	loadFrame(movie, movie.firstObject(), cropInput, frame);
-	int noOfImgs = nlast - nfirst + 1;
 	int paddedLineLength = (frame.data.xdim/2+1)*2;
 	size_t noOfFloats = noOfImgs * std::max(frame.data.yxdim, paddedLineLength * frame.data.ydim * 2);
 	float* imgs = new float[noOfFloats]();

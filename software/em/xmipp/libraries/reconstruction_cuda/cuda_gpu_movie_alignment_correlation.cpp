@@ -1,7 +1,10 @@
 
 #include <cuda_runtime_api.h>
 #include "reconstruction_cuda/cuda_utils.h" // cannot be in header as it includes cuda headers
+#include "advisor.h"
+#include "cudaUtils.h"
 #include "cuda_gpu_reconstruct_fourier.h"
+#include "cuda_gpu_movie_alignment_correlation.h"
 #include "reconstruction_cuda/cuda_basic_math.h"
 
 #define BLOCK_DIM_X 32
@@ -74,7 +77,25 @@ void kernel2(const float2* __restrict__ src, float2* dest, int noOfImages, size_
 //	}
 }
 
+int getBestSize(int noOfImgs, int newXdim) {
+	int device = 0; // FIXME
 
+	size_t freeMem = cuFFTAdvisor::toMB(cuFFTAdvisor::getFreeMemory(device));
+	std::vector<cuFFTAdvisor::BenchmarkResult const *> *results =
+			cuFFTAdvisor::Advisor::find(50, device,
+					newXdim, 1, 1, noOfImgs,
+					cuFFTAdvisor::Tristate::TRUE,
+					cuFFTAdvisor:: Tristate::TRUE,
+					cuFFTAdvisor::Tristate::TRUE,
+					cuFFTAdvisor::Tristate::TRUE,
+					cuFFTAdvisor::Tristate::TRUE, INT_MAX,
+						  freeMem);
+
+
+
+
+	return results->at(0)->transform->X;
+}
 
 
 void kernel1(float* imgs, size_t oldX, size_t oldY, int noOfImages, size_t newX, size_t newY,
@@ -143,6 +164,7 @@ void kernel1(float* imgs, size_t oldX, size_t oldY, int noOfImages, size_t newX,
 	cudaMemset(d_cropped, 0.f, noOfCroppedFloats*sizeof(float2));
 	dim3 dimBlock(BLOCK_DIM_X, BLOCK_DIM_X);
 	dim3 dimGrid(ceil(newFFTX/(float)dimBlock.x), ceil(newY/(float)dimBlock.y));
+	printf("byl jsem zde\n");
 	kernel2<<<dimGrid, dimBlock>>>((float2*)resultingFFT.d_data, d_cropped, noOfImages, resultingFFT.Xdim, resultingFFT.Ydim, newFFTX, newY, d_filter);
 	cudaFree(d_filter);
 	resultingFFT.clear();
