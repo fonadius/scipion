@@ -5,6 +5,7 @@
 #include <cmath>
 #include <stdlib.h>
 #include <time.h>
+#include <data/filters.h>
 
 class myMotioncorrTest : public ::testing::Test {
 protected:
@@ -117,6 +118,8 @@ int getValue(MultidimArray<int>& array, int y, int x) {
 void applyDeformation(MultidimArray<int>& input, MultidimArray<int>& output, std::vector<double>& cy,
     std::vector<double>& cx, double t1, double t2)
 {
+    size_t maxX = input.colNumber();
+    size_t maxY = input.rowNumber();
     FOR_ALL_DIRECT_ELEMENTS_IN_ARRAY2D(input)
     {
         int y = i;
@@ -126,51 +129,121 @@ void applyDeformation(MultidimArray<int>& input, MultidimArray<int>& output, std
         double posx = x + calculateShift(y, x, t2, cx) - calculateShift(y, x, t1, cx);
         // std::cout << posx << ":" << x << "   " << posy << ":" << y << std::endl;
 
-        double x_left = floor(posx);
-        double x_right = x_left + 1;
-        double y_down = floor(posy);
-        double y_up = y_down + 1;
+        int x_left = floor(posx);
+        int x_right = x_left + 1;
+        int y_down = floor(posy);
+        int y_up = y_down + 1;
 
-        double v11 = getValue(input, y_down, x_left);
-        double v12 = getValue(input, y_down, x_right);
-        double v21 = getValue(input, y_up, x_left);
-        double v22 = getValue(input, y_up, x_right);
+        double val;
+        if (x_right <= 0 || y_up <= 0 || x_left >= maxX -1 || y_down >= maxY - 1) {
+            val = 0;
+        } else {
+            double v11 = A2D_ELEM(input, y_down, x_left);
+            double v12 = A2D_ELEM(input, y_down, x_right);
+            double v21 = A2D_ELEM(input, y_up, x_left);
+            double v22 = A2D_ELEM(input, y_up, x_right);
+            val = linearInterpolation(y_down, x_left, y_up, x_right, v11, v12, v21, v22, posy, posx);
+        }
 
-        A2D_ELEM(output, i, j) = linearInterpolation(y_down, x_left, y_up, x_right, v11,
-                                                            v12, v21, v22, posy, posx);
+        A2D_ELEM(output, i, j) = val;
     }
 }
 
 void generateCoefficients(std::vector<double>& out) {
     for (int i = 0; i < 9; i++) {
-        double random = ((double) (rand() % 100)) / 1000;
+        double random = ((double) (rand() % 100)) / 10000;
         std::cout << random << std::endl;
         out[i] = random;
     }
 }
 
-TEST_F(myMotioncorrTest, superTest)
-{
-    std::cout << "-----------**************------------" << std::endl;
-    FileName testFile((String) "/home/fonadius/Downloads/test.tif");
-    srand(time(NULL));
-    
-    Image<int> img1(1024, 768, 1, 1);
-    img1.read(testFile);
-    Image<int> img2(1024, 768, 1, 1);
-
-    std::vector<double> cy(9, 0);
-    std::vector<double> cx(9, 0);
-    generateCoefficients(cy);
-    generateCoefficients(cx);
-
-    addGrid(img1);
-
-    applyDeformation(img1(), img2(), cy, cx, 0, 1);
-
-    FileName deformedFile((String) "/home/fonadius/Downloads/deformed.jpg");
-    img2.write(deformedFile);
+void addSquare(MultidimArray<double>& input, int edgeSize, int y, int x) {
+    for (int iy = y; iy < y+edgeSize; iy++) {
+        for (int ix = x; ix < x+edgeSize; ix++) {
+            A2D_ELEM(input, iy, ix) = 255.0;
+        }
+    }
 }
+
+void calculateAndCorrectForShifts(std::vector<MultidimArray<double> >& frames, std::vector<double>& shiftsX,
+    std::vector<double>& shiftsY)
+{
+    CorrelationAux aux;
+    int cycles;
+    while (cycles < 5) {
+        for (MultidimArray<double>& ma: frames)
+    }
+
+}
+
+TEST_F(myMotioncorrTest, testShiftCalcAndTranslation)
+{
+    std::cout << "--------*****--------------" << std::endl;
+    int height = 256;
+    int width = 512;
+    Image<double> img1(height, width, 1, 1);
+    Image<double> img2(height, width, 1, 1);
+
+    addSquare(img1(), 25, 20, 100);
+    addSquare(img2(), 25, 58, 90);
+
+    img1().setXmippOrigin();
+    img2().setXmippOrigin();
+
+    CorrelationAux aux;
+    double shiftX;
+    double shiftY;
+
+    Image<double> resultUnshifted(height, width, 1, 1);
+    resultUnshifted() = img1() + img2();
+
+    bestShift(img1(), img2(), shiftX, shiftY, aux);
+
+    Image<double> img2Shifted(height, width, 1, 1);
+    img2Shifted().setXmippOrigin();
+
+    translate(1, img2Shifted(), img2(), vectorR2(shiftX, shiftY), false, 0.0);
+
+    Image<double> resultShifted(height, width, 1, 1);
+    resultShifted() = img1() + img2Shifted();
+
+    std::cout << "y: " << shiftY << ", x: " << shiftX << std::endl;
+
+
+    FileName imgUnshiftedFile((String) "/home/fonadius/Downloads/img_unshifted.jpg");
+    FileName imgShiftedFile((String) "/home/fonadius/Downloads/img_shifted.jpg");
+    FileName img1File((String) "/home/fonadius/Downloads/img1.jpg");
+    FileName img2File((String) "/home/fonadius/Downloads/img2.jpg");
+    img1.write(img1File);
+    img2.write(img2File);
+    resultUnshifted.write(imgUnshiftedFile);
+    resultShifted.write(imgShiftedFile);
+}
+
+
+
+// TEST_F(myMotioncorrTest, superTest)
+// {
+//     std::cout << "-----------**************------------" << std::endl;
+//     FileName testFile((String) "/home/fonadius/Downloads/test.tif");
+//     srand(time(NULL));
+    
+//     Image<int> img1(1024, 768, 1, 1);
+//     img1.read(testFile);
+//     Image<int> img2(1024, 768, 1, 1);
+
+//     std::vector<double> cy(9, 0);
+//     std::vector<double> cx(9, 0);
+//     generateCoefficients(cy);
+//     generateCoefficients(cx);
+
+//     addGrid(img1);
+
+//     applyDeformation(img1(), img2(), cy, cx, 0, 1);
+
+//     FileName deformedFile((String) "/home/fonadius/Downloads/deformed.jpg");
+//     img2.write(deformedFile);
+// }
 
 // TEST_F(myMotioncorrTest, interpolationTest) 
 // {
