@@ -6,6 +6,9 @@
 #include <stdlib.h>
 #include <time.h>
 #include <data/filters.h>
+#include <limits>
+#include <algorithm>
+#include <reconstruction/movie_alignment_deformation_model.h>
 
 class myMotioncorrTest : public ::testing::Test {
 protected:
@@ -22,170 +25,118 @@ protected:
     // Objects declared here can be used by all tests in the test case for Foo. 
 };
 
-void addGrid(Image<int> &img) {
-    FOR_ALL_ELEMENTS_IN_ARRAY3D(img.data) {
-        int val = A3D_ELEM(img.data, k, i, j);
+// void addGrid(Image<int> &img) {
+//     FOR_ALL_ELEMENTS_IN_ARRAY3D(img.data) {
+//         int val = A3D_ELEM(img.data, k, i, j);
 
-        if (i % 45 <= 5 or j % 45 <=5) {
-            val = 0;
-        }
+//         if (i % 45 <= 5 or j % 45 <=5) {
+//             val = 0;
+//         }
         
-        A3D_ELEM(img.data, k, i, j) = val;
-    }
-}
-
-/**
- * @brief Performs linear interpolation
- * @details  With the following argument naming
-    y1: v11 ......... v12
-        .................
-        ...... p ........
-        .................
-        .................
-    y2: v21 ......... v22
-        x1             x2
-    (y increases from top to down, x increases from left to right)
-    Values q_i are expected to be in strict orthogonal grid, where q11 and q21 have the same x coordinates (the same
-    applies for q12 and q22) and q11 and q12 have the same y coordinates (the same applies for q21 and q22).
- * 
- * @param y [description]
- * @param x [description]
- * 
- * @return [description]
- */
-double linearInterpolation(double y1, double x1, double y2, double x2, double v11, double v12, double v21, double v22,
-                            double p_y, double p_x)
-{
-    double p1, p2, p;
-    // x interpolation
-    if (x1 == x2)
-    {
-        p1 = v11;
-        p2 = v21;
-    }
-    else 
-    {
-        double diffx = (x2 - x1);
-        double rat1 = (x2 - p_x) / diffx;
-        double rat2 = (p_x - x1) / diffx;
-
-        p1 = v11 * rat1 + v12 * rat2;
-        p2 = v21 * rat1 + v22 * rat2;
-    }
-
-    // y interpolation
-    if (y1 == y2)
-    {
-        p = p1;
-    }
-    else
-    {
-        double diffy = (y2 - y1);
-        double rat1 = (y2 - p_y) / diffy;
-        double rat2 = (p_y - y1) / diffy;
-
-        p = p1 * rat1 + p2 * rat2;
-    }
-
-    return p;
-}
-
-
-// void loadImages(std::vector<String> filePaths) {
-//     Image(1024, 768, 1, filePaths.size());
-//     for (String s : filePaths) {
-//         FileName fn(s);
-
+//         A3D_ELEM(img.data, k, i, j) = val;
 //     }
 // }
 
-double calculateShift(double x, double y, double t, std::vector<double>& c)
-{
-    double t2 = t * t;
-    double t3 = t2 * t;
-
-    return (c[0] + c[1] * x + c[2] * x * x + c[3] * y + c[4] * y * y + c[5] * x * y) *
-            (c[6] * t + c[7] * t2 + c[8] * t3);
-}
-
-int getValue(MultidimArray<int>& array, int y, int x) {
-    if (array.outside(y, x)) {
-        return 0;
-    }
-    return A2D_ELEM(array, y, x);
-}
-
-void applyDeformation(MultidimArray<int>& input, MultidimArray<int>& output, std::vector<double>& cy,
-    std::vector<double>& cx, double t1, double t2)
-{
-    size_t maxX = input.colNumber();
-    size_t maxY = input.rowNumber();
-    FOR_ALL_DIRECT_ELEMENTS_IN_ARRAY2D(input)
-    {
-        int y = i;
-        int x = j;
-
-        double posy = y + calculateShift(y, x, t2, cy) - calculateShift(y, x, t1, cy);
-        double posx = x + calculateShift(y, x, t2, cx) - calculateShift(y, x, t1, cx);
-        // std::cout << posx << ":" << x << "   " << posy << ":" << y << std::endl;
-
-        int x_left = floor(posx);
-        int x_right = x_left + 1;
-        int y_down = floor(posy);
-        int y_up = y_down + 1;
-
-        double val;
-        if (x_right <= 0 || y_up <= 0 || x_left >= maxX -1 || y_down >= maxY - 1) {
-            val = 0;
-        } else {
-            double v11 = A2D_ELEM(input, y_down, x_left);
-            double v12 = A2D_ELEM(input, y_down, x_right);
-            double v21 = A2D_ELEM(input, y_up, x_left);
-            double v22 = A2D_ELEM(input, y_up, x_right);
-            val = linearInterpolation(y_down, x_left, y_up, x_right, v11, v12, v21, v22, posy, posx);
-        }
-
-        A2D_ELEM(output, i, j) = val;
-    }
-}
-
-void generateCoefficients(std::vector<double>& out) {
-    for (int i = 0; i < 9; i++) {
-        double random = ((double) (rand() % 100)) / 10000;
-        std::cout << random << std::endl;
-        out[i] = random;
-    }
-}
+// void generateCoefficients(std::vector<double>& out) {
+//     for (int i = 0; i < 9; i++) {
+//         double random = ((double) (rand() % 100)) / 10000;
+//         std::cout << random << std::endl;
+//         out[i] = random;
+//     }
+// }
 
 void addSquare(MultidimArray<double>& input, int edgeSize, int y, int x) {
     for (int iy = y; iy < y+edgeSize; iy++) {
         for (int ix = x; ix < x+edgeSize; ix++) {
-            A2D_ELEM(input, iy, ix) = 255.0;
+            A2D_ELEM(input, iy, ix) = 1.0;
         }
     }
 }
 
-void calculateAndCorrectForShifts(std::vector<MultidimArray<double> >& frames, std::vector<double>& shiftsX,
-    std::vector<double>& shiftsY)
-{
-    CorrelationAux aux;
-    int cycles;
-    while (cycles < 5) {
-        for (MultidimArray<double>& ma: frames)
-    }
+// TEST_F(myMotioncorrTest, testDataLoading) 
+// {
+//     FileName starFile("/home/fonadius/Downloads/movie.xmd");
+//     MetaData movie;
+//     readMovie(movie, starFile);
 
+//     MDRow  row;
+//     double time;
+//     Image<double> frame;
+//     FileName fnFrame("/home/fonadius/Downloads/movie01.mrc");
+//     FileName folder = starFile.getDir(); //removeFilename()
+
+//     FOR_ALL_OBJECTS_IN_METADATA(movie) //loop through all lines
+//     {   
+//         movie.getRow(row, __iter.objId); //read line
+//         if (row.getValue(MDL_TIME, time))
+//         {
+//               std::cout << "The sampling rate is: " <<  time << std::endl;
+//         }
+//         else
+//         {
+//             std::cout << "no value " << std::endl;
+//         }
+//         row.getValue(MDL_IMAGE, fnFrame);
+//         std::cout << "name: " << fnFrame << std::endl;
+//         frame.read(folder + fnFrame);
+//     }
+
+//     FileName res("/home/fonadius/Downloads/last.jpg");
+//     frame.write(res);
+
+// }
+
+TEST_F(myMotioncorrTest, testMultipleShifts) {
+    Image<double> img1(256, 512, 1, 1);
+    Image<double> img2(256, 512, 1, 1);
+    Image<double> img3(256, 512, 1, 1);
+    Image<double> img4(256, 512, 1, 1);
+
+    addSquare(img1(), 20, 68, 100);
+    addSquare(img2(), 20, 200, 45);
+    addSquare(img3(), 20, 172, 437);
+    addSquare(img4(), 20, 20, 310);
+
+    img1().setXmippOrigin();
+    img2().setXmippOrigin();
+    img3().setXmippOrigin();
+    img4().setXmippOrigin();
+    std::vector<MultidimArray<double> > frames = {img1(), img2(), img3(), img4()};
+
+    std::vector<double> shiftsX = {0, 0, 0, 0};
+    std::vector<double> shiftsY = {0, 0, 0, 0};
+    calculateAndCorrectForShifts(frames, shiftsX, shiftsY);
+
+    MultidimArray<double> helper;
+    helper.initZeros(img1());
+    MultidimArray<double> sum;
+    sum.initZeros(helper);
+
+    applyShift(img1(), helper, shiftsX[0], shiftsY[0]);
+    sum += helper;
+    applyShift(img2(), helper, shiftsX[1], shiftsY[1]);
+    sum += helper;
+    applyShift(img3(), helper, shiftsX[2], shiftsY[2]);
+    sum += helper;
+    applyShift(img4(), helper, shiftsX[3], shiftsY[3]);
+    sum += helper;
+
+    Image<double> sumImg(sum);
+
+    FileName fn("/home/fonadius/Downloads/sumAll.jpg");
+    sumImg.write(fn);
 }
 
-TEST_F(myMotioncorrTest, testShiftCalcAndTranslation)
+TEST_F(myMotioncorrTest, testShiftAndTranslation)
 {
-    std::cout << "--------*****--------------" << std::endl;
-    int height = 256;
-    int width = 512;
+    size_t height = 256;
+    size_t width = 512;
+    size_t edge = 25;
     Image<double> img1(height, width, 1, 1);
     Image<double> img2(height, width, 1, 1);
 
-    addSquare(img1(), 25, 20, 100);
-    addSquare(img2(), 25, 58, 90);
+    addSquare(img1(), edge, 20, 100);
+    addSquare(img2(), edge, 58, 90);
 
     img1().setXmippOrigin();
     img2().setXmippOrigin();
@@ -193,31 +144,21 @@ TEST_F(myMotioncorrTest, testShiftCalcAndTranslation)
     CorrelationAux aux;
     double shiftX;
     double shiftY;
-
-    Image<double> resultUnshifted(height, width, 1, 1);
-    resultUnshifted() = img1() + img2();
-
     bestShift(img1(), img2(), shiftX, shiftY, aux);
+    
+
+    ASSERT_NEAR(shiftY, -38, 1e-10);
+    ASSERT_NEAR(shiftX, 10, 1e-10);
 
     Image<double> img2Shifted(height, width, 1, 1);
     img2Shifted().setXmippOrigin();
+    translate(2, img2Shifted(), img2(), vectorR2(shiftX, shiftY), false, 0.0);
 
-    translate(1, img2Shifted(), img2(), vectorR2(shiftX, shiftY), false, 0.0);
-
-    Image<double> resultShifted(height, width, 1, 1);
-    resultShifted() = img1() + img2Shifted();
-
-    std::cout << "y: " << shiftY << ", x: " << shiftX << std::endl;
-
-
-    FileName imgUnshiftedFile((String) "/home/fonadius/Downloads/img_unshifted.jpg");
-    FileName imgShiftedFile((String) "/home/fonadius/Downloads/img_shifted.jpg");
-    FileName img1File((String) "/home/fonadius/Downloads/img1.jpg");
-    FileName img2File((String) "/home/fonadius/Downloads/img2.jpg");
-    img1.write(img1File);
-    img2.write(img2File);
-    resultUnshifted.write(imgUnshiftedFile);
-    resultShifted.write(imgShiftedFile);
+    Image<double> result(height, width, 1, 1);
+    result() = img1() + img2Shifted();
+    size_t nonZeroPixels = result().countThreshold("above", 0.1, 0.0);
+    ASSERT_EQ(nonZeroPixels, edge*edge);
+    
 }
 
 
@@ -245,33 +186,35 @@ TEST_F(myMotioncorrTest, testShiftCalcAndTranslation)
 //     img2.write(deformedFile);
 // }
 
-// TEST_F(myMotioncorrTest, interpolationTest) 
-// {
-//     // In form (y1, x1, y2, x2, v11, v12, v21, v22, y, x, expected)
-//     // In form (q11, q12, q21, q22, y, x, expected)
-//     std::vector<double> knownValues = {
-//         // all points are one point
-//         5.5, 5.5, 5.5, 5.5, 12.3, 12.3, 12.3, 12.3, 5.5, 5.5, 12.3,
-//         // all points lie on the same x coordinates
-//         1, 1, 2, 1, 1, 1, 3, 3, 1.5, 1.5, 2,
-//         // all points lie on the same y coordinates
-//         8, 8, 8, 11, 2, 4, 2, 4, 8, 10, 3 + 1.0/3.0,
-//         // point in the middle
-//         1, 1, 4, 4, 1, 1, 2, 2, 2.5, 2.5, 1.5,
-//         // normal points
-//         2.1, 1, 4.8, 3.62, 3.5, 1, 2, 4, 3.2, 2.5, 2.5072094995759118,
-//         1, 3.12, 5.6, 12, 1, -2, 9.8, 5.1, 1.12, 10, -1.1291186839012923,
-//         8.13, 4.82, 22.65, 4.99, 19, 17, 5, 24, 20.1, 4.87, 11.962202236266407
-//     };
+TEST_F(myMotioncorrTest, interpolationTest) 
+{
+    // In form (y1, x1, y2, x2, v11, v12, v21, v22, y, x, expected)
+    // In form (q11, q12, q21, q22, y, x, expected)
+    std::vector<double> knownValues = {
+        // all points are one point
+        5.5, 5.5, 5.5, 5.5, 12.3, 12.3, 12.3, 12.3, 5.5, 5.5, 12.3,
+        // all points lie on the same x coordinates
+        1, 1, 2, 1, 1, 1, 3, 3, 1.5, 1.5, 2,
+        // all points lie on the same y coordinates
+        8, 8, 8, 11, 2, 4, 2, 4, 8, 10, 3 + 1.0/3.0,
+        // point in the middle
+        1, 1, 4, 4, 1, 1, 2, 2, 2.5, 2.5, 1.5,
+        // normal points
+        2.1, 1, 4.8, 3.62, 3.5, 1, 2, 4, 3.2, 2.5, 2.5072094995759118,
+        1, 3.12, 5.6, 12, 1, -2, 9.8, 5.1, 1.12, 10, -1.1291186839012923,
+        8.13, 4.82, 22.65, 4.99, 19, 17, 5, 24, 20.1, 4.87, 11.962202236266407
+    };
 
-//     for (int i = 0; i < knownValues.size(); i+=11)
-//     {
-//         double* item = &knownValues.front() + i;
-//         double result = linearInterpolation(item[0], item[1], item[2], item[3], item[4],
-//             item[5], item[6], item[7], item[8], item[9]);
-//         ASSERT_NEAR(result, item[10], 1e-12);
-//     }
-// }
+    ProgMovieAlignmentDeformationModel padm;
+
+    for (int i = 0; i < knownValues.size(); i+=11)
+    {
+        double* item = &knownValues.front() + i;
+        double result = padm.linearInterpolation(item[0], item[1], item[2], item[3], item[4],
+            item[5], item[6], item[7], item[8], item[9]);
+        ASSERT_NEAR(result, item[10], 1e-12);
+    }
+}
 
 GTEST_API_ int main(int argc, char **argv)
 {
