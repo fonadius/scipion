@@ -30,7 +30,7 @@ void ProgMovieAlignmentDeformationModel::readParams()
 {
 	fnMovie = getParam("-i");
 	fnMicrograph = getParam("-o");
-    fnMaxIterations = getIntParam("--maxIterations");
+    maxIterations = getIntParam("--maxIterations");
     fnUnaligned = getParam("--ounaligned");
     show();
 }
@@ -42,7 +42,7 @@ void ProgMovieAlignmentDeformationModel::show()
     std::cout 
     << "Input movie:          " << fnMovie           << std::endl
     << "Output micrograph:    " << fnMicrograph      << std::endl
-    << "Max iterations:       " << fnMaxIterations   << std::endl
+    << "Max iterations:       " << maxIterations     << std::endl
 	<< "Unaligned micrograph: " << fnInitialAvg      << std::endl;
 }
 
@@ -52,36 +52,36 @@ void ProgMovieAlignmentDeformationModel::defineParams()
     addParamsLine("   -i <metadata>               : Metadata with the list of frames to align");
     addParamsLine("   -o <fn=\"\"> 		          : Give the name of a micrograph to generate an aligned micrograph");
     addParamsLine("  [--maxIterations <N=5>]	  : Number of robust least squares iterations");
-    addParamsLine("  [--ounaligned]    			  : Give the name of a micrograph to generate an unaligned (initial) micrograph");
+    addParamsLine("  [--ounaligned <fn=\"\">]     : Give the name of a micrograph to generate an unaligned (initial) micrograph");
 }
 
 void ProgMovieAlignmentDeformationModel::run()
 {
-    // preprocess input data
-    MetaData movie;
-	readMovie(movie);
-	correctLoopIndices(movie);
+ //    // preprocess input data
+ //    MetaData movie;
+	// readMovie(movie);
+	// correctLoopIndices(movie);
 
-	Image<double> dark, gain;
-	loadDarkCorrection(dark);
-	loadGainCorrection(gain);
+	// Image<double> dark, gain;
+	// loadDarkCorrection(dark);
+	// loadGainCorrection(gain);
 
-    int bestIref;
-    if (useInputShifts)
-    {
-    	if (!movie.containsLabel(MDL_SHIFT_X)) { // FIXME seems suspicious
-    		setZeroShift(movie);
-    	}
-    } else {
-		bestIref = findShiftsAndStore(movie, dark, gain);
-    }
+ //    int bestIref;
+ //    if (useInputShifts)
+ //    {
+ //    	if (!movie.containsLabel(MDL_SHIFT_X)) { // FIXME seems suspicious
+ //    		setZeroShift(movie);
+ //    	}
+ //    } else {
+	// 	bestIref = findShiftsAndStore(movie, dark, gain);
+ //    }
 
-	size_t N, Ninitial;
-	Image<double> initialMic, averageMicrograph;
-    // Apply shifts and compute average
-	applyShiftsComputeAverage(movie, dark, gain, initialMic, Ninitial,
-			averageMicrograph, N);
+	// size_t N, Ninitial;
+	// Image<double> initialMic, averageMicrograph;
+ //    // Apply shifts and compute average
+	// applyShiftsComputeAverage(movie, dark, gain, initialMic, Ninitial,
+	// 		averageMicrograph, N);
 
-	storeResults(initialMic, Ninitial, averageMicrograph, N, movie, bestIref);
+	// storeResults(initialMic, Ninitial, averageMicrograph, N, movie, bestIref);
 }
 
