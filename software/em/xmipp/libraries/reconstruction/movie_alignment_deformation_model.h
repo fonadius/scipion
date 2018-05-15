@@ -50,6 +50,9 @@ private:
 	std::vector<double> globalShiftsX;
 	std::vector<double> globalShiftsY;
 
+	std::vector<double> localShiftsX;
+	std::vector<double> localShiftsY;
+
 	std::vector<double> deformationCoefficientsX;
 	std::vector<double> deformationCoefficientsY;
 
@@ -57,6 +60,8 @@ private:
 
 	MultidimArray<double> correctedMicrograph;
 	MultidimArray<double> unalignedMicrograph;
+
+	const int PARTITION_AXIS_COUNT = 5;	// how many divisions into partitions should be along each frame axis
 public:
     /// Read argument from command line
     void readParams();
@@ -98,8 +103,17 @@ public:
 	 * @return [description]
 	 * TODO: maybe move somewhere else?
 	 */
-	double linearInterpolation(double y1, double x1, double y2, double x2, double v11, double v12, double v21, double v22,
-            double p_y, double p_x);
+	double linearInterpolation(double y1, double x1, double y2, double x2, double v11, double v12, double v21,
+			double v22, double p_y, double p_x);
+
+	void partitionFrames(const std::vector<MultidimArray<double>>& frames,
+			std::vector<std::vector<MultidimArray<double>>>& partitions, int edgeCount);
+
+	void estimateLocalShifts(const std::vector<std::vector<MultidimArray<double>>>& partitions,
+			std::vector<double>& shiftsX, std::vector<double>& shiftsY);
+
+	void calculateModelCoefficients(const std::vector<double>& shiftsX, const std::vector<double>& shiftsY,
+			const std::vector<double>& timeStamps, std::vector<double>& coeffsX, std::vector<double>& coeffsY);
 
 	void motionCorrect(const std::vector<MultidimArray<double>>& input, std::vector<MultidimArray<double>>& output,
 			const std::vector<double>& timeStamps, const std::vector<double>& cx, const std::vector<double>& cy);

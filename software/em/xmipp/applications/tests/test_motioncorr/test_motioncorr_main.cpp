@@ -86,80 +86,120 @@ void addSquare(MultidimArray<double>& input, int edgeSize, int y, int x) {
 
 // }
 
-TEST_F(myMotioncorrTest, testMultipleShifts) {
-    Image<double> img1(256, 512, 1, 1);
-    Image<double> img2(256, 512, 1, 1);
-    Image<double> img3(256, 512, 1, 1);
-    Image<double> img4(256, 512, 1, 1);
+TEST_F(myMotioncorrTest, testPartitioning) {
+    int partitionCount = 5;
+    std::vector<MultidimArray<double>> frames;
+    frames.resize(10);
+    for (MultidimArray<double>& frame) {
+        frame.resize(1, 1, 112, 98);
+    }
 
-    addSquare(img1(), 20, 68, 100);
-    addSquare(img2(), 20, 200, 45);
-    addSquare(img3(), 20, 172, 437);
-    addSquare(img4(), 20, 20, 310);
+    std::vector<std::vector<MultidimArray<double>>> partitions;
+    partitions.resize(partitionCount * partitionCount, {});
+    for (int i = 0; i < partitions.size(); i++) {
+        partitions[i].resize(this->frames.size());
+    }
 
-    img1().setXmippOrigin();
-    img2().setXmippOrigin();
-    img3().setXmippOrigin();
-    img4().setXmippOrigin();
-    std::vector<MultidimArray<double> > frames = {img1(), img2(), img3(), img4()};
+    ProgMovieAlignmentDeformationModel pmadm;
+    pmadm.partitionFrames(frames, partitions, partitionCount);
 
-    std::vector<double> shiftsX = {0, 0, 0, 0};
-    std::vector<double> shiftsY = {0, 0, 0, 0};
-    calculateAndCorrectForShifts(frames, shiftsX, shiftsY);
-
-    MultidimArray<double> helper;
-    helper.initZeros(img1());
-    MultidimArray<double> sum;
-    sum.initZeros(helper);
-
-    applyShift(img1(), helper, shiftsX[0], shiftsY[0]);
-    sum += helper;
-    applyShift(img2(), helper, shiftsX[1], shiftsY[1]);
-    sum += helper;
-    applyShift(img3(), helper, shiftsX[2], shiftsY[2]);
-    sum += helper;
-    applyShift(img4(), helper, shiftsX[3], shiftsY[3]);
-    sum += helper;
-
-    Image<double> sumImg(sum);
-
-    FileName fn("/home/fonadius/Downloads/sumAll.jpg");
-    sumImg.write(fn);
+    //check sizes
+    ASSERT_EQ(partitions.size(), partitionCount * partitionCount);
+    for (std::vector<MultidimArray<double>>& partStack : partitions) {
+        ASSERT_EQ(partStack.size(), frames.size());
+        for (int i = 0; i < partStack.size(); i++) {
+            int indexY = ;
+            int indexX = ;
+            if (indexX < 2) {
+                ASSERT_EQ(XSIZE(partStack[i]), 23);
+            } else {
+                ASSERT_EQ(XSIZE(partStack[i]), 22);
+            }
+            if (indexY < 3) {
+                ASSERT_EQ(YSIZE(partStack[i]), 20);
+            } else {
+                ASSERT_EQ(YSIZE(partStack[i]), 19);
+            }
+        }
+    }
 }
 
-TEST_F(myMotioncorrTest, testShiftAndTranslation)
-{
-    size_t height = 256;
-    size_t width = 512;
-    size_t edge = 25;
-    Image<double> img1(height, width, 1, 1);
-    Image<double> img2(height, width, 1, 1);
+//TODO:
+// TEST_F(myMotioncorrTest, testMultipleShifts) {
+//     Image<double> img1(256, 512, 1, 1);
+//     Image<double> img2(256, 512, 1, 1);
+//     Image<double> img3(256, 512, 1, 1);
+//     Image<double> img4(256, 512, 1, 1);
 
-    addSquare(img1(), edge, 20, 100);
-    addSquare(img2(), edge, 58, 90);
+//     addSquare(img1(), 20, 68, 100);
+//     addSquare(img2(), 20, 200, 45);
+//     addSquare(img3(), 20, 172, 437);
+//     addSquare(img4(), 20, 20, 310);
 
-    img1().setXmippOrigin();
-    img2().setXmippOrigin();
+//     img1().setXmippOrigin();
+//     img2().setXmippOrigin();
+//     img3().setXmippOrigin();
+//     img4().setXmippOrigin();
+//     std::vector<MultidimArray<double> > frames = {img1(), img2(), img3(), img4()};
 
-    CorrelationAux aux;
-    double shiftX;
-    double shiftY;
-    bestShift(img1(), img2(), shiftX, shiftY, aux);
+//     std::vector<double> shiftsX = {0, 0, 0, 0};
+//     std::vector<double> shiftsY = {0, 0, 0, 0};
+//     calculateAndCorrectForShifts(frames, shiftsX, shiftsY);
+
+//     MultidimArray<double> helper;
+//     helper.initZeros(img1());
+//     MultidimArray<double> sum;
+//     sum.initZeros(helper);
+
+//     applyShift(img1(), helper, shiftsX[0], shiftsY[0]);
+//     sum += helper;
+//     applyShift(img2(), helper, shiftsX[1], shiftsY[1]);
+//     sum += helper;
+//     applyShift(img3(), helper, shiftsX[2], shiftsY[2]);
+//     sum += helper;
+//     applyShift(img4(), helper, shiftsX[3], shiftsY[3]);
+//     sum += helper;
+
+//     Image<double> sumImg(sum);
+
+//     FileName fn("/home/fonadius/Downloads/sumAll.jpg");
+//     sumImg.write(fn);
+// }
+
+//TODO:
+// TEST_F(myMotioncorrTest, testShiftAndTranslation)
+// {
+//     size_t height = 256;
+//     size_t width = 512;
+//     size_t edge = 25;
+//     Image<double> img1(height, width, 1, 1);
+//     Image<double> img2(height, width, 1, 1);
+
+//     addSquare(img1(), edge, 20, 100);
+//     addSquare(img2(), edge, 58, 90);
+
+//     img1().setXmippOrigin();
+//     img2().setXmippOrigin();
+
+//     CorrelationAux aux;
+//     double shiftX;
+//     double shiftY;
+//     bestShift(img1(), img2(), shiftX, shiftY, aux);
     
 
-    ASSERT_NEAR(shiftY, -38, 1e-10);
-    ASSERT_NEAR(shiftX, 10, 1e-10);
+//     ASSERT_NEAR(shiftY, -38, 1e-10);
+//     ASSERT_NEAR(shiftX, 10, 1e-10);
 
-    Image<double> img2Shifted(height, width, 1, 1);
-    img2Shifted().setXmippOrigin();
-    translate(2, img2Shifted(), img2(), vectorR2(shiftX, shiftY), false, 0.0);
+//     Image<double> img2Shifted(height, width, 1, 1);
+//     img2Shifted().setXmippOrigin();
+//     translate(2, img2Shifted(), img2(), vectorR2(shiftX, shiftY), false, 0.0);
 
-    Image<double> result(height, width, 1, 1);
-    result() = img1() + img2Shifted();
-    size_t nonZeroPixels = result().countThreshold("above", 0.1, 0.0);
-    ASSERT_EQ(nonZeroPixels, edge*edge);
+//     Image<double> result(height, width, 1, 1);
+//     result() = img1() + img2Shifted();
+//     size_t nonZeroPixels = result().countThreshold("above", 0.1, 0.0);
+//     ASSERT_EQ(nonZeroPixels, edge*edge);
     
-}
+// }
 
 
 

@@ -70,11 +70,16 @@ void ProgMovieAlignmentDeformationModel::run()
 
 	applyShifts(this->frames, this->globalShiftsX, this->globalShiftsY);
 
-	//partition
+    std::vector<std::vector<MultidimArray<double>>> partitions;
+    partitions.resize(this->PARTITION_AXIS_COUNT * this->PARTITION_AXIS_COUNT, {});
+    for (int i = 0; i < partitions.size(); i++) {
+        partitions[i].resize(this->frames.size());
+    }
+    partitionFrames(this->frames, partitions, this->PARTITION_AXIS_COUNT);
 
-	//calculate local movement
+	estimateLocalShifts(partitions, this->localShiftsX, this->localShiftsY);
 
-	//calculate coefficients
+	calculateModelCoefficients(this->timeStamps, this->deformationCoefficientsX, this->deformationCoefficientsY);
 
 	motionCorrect(this->frames, this->correctedFrames, this->timeStamps, this->deformationCoefficientsX,
 			this->deformationCoefficientsY);
@@ -224,6 +229,74 @@ double ProgMovieAlignmentDeformationModel::linearInterpolation(double y1, double
     }
 
     return p;
+}
+
+void ProgMovieAlignmentDeformationModel::partitionFrames(const std::vector<MultidimArray<double>>& frames,
+        std::vector<std::vector<MultidimArray<double>>>& partitions, int edgeCount)
+{
+    // properly resize the individual partitions
+    int partSizeY = YSIZE(frames[0]) / edgeCount;
+    int partSizeX = XSIZE(frames[0]) / edgeCount;
+    int yReminder = YSIZE(frames[0]) - (partSizeY * edgeCount);
+    int xReminder = XSIZE(frames[0]) - (partSizeX * edgeCount);
+
+    for (std::vector<MultidimArray<double>>& partStack : partitions) {
+        for (int i = 0; i < partStack.size(); i++) {
+            int partY = i / edgeCount;
+            int partX = i % edgeCount;
+
+            int xSize = partSizeX + (partX < xReminder ? 1 : 0);
+            int ySize = partSizeY + (partY < yReminder ? 1 : 0);
+            part.resize(1, 1, ySize, xSize);
+        }
+    }
+
+
+    int longerPartY = yReminder * (partSizeY + 1);
+    int longerPartX = xReminder * (partSizeX + 1);
+    for (int fi = 0; fi < frames.size(); fi++) {
+        FOR_ALL_DIRECT_NZYX_ELEMENTS_IN_MULTIDIMARRAY(frames[fi]) {
+            int partY, partX; // index of the partition
+            int innerY, innerX; // index inside the partition
+            
+            if (i < longerPartY) { // still in the part where partitions are longer along y
+                partY = i / (partSizeY + 1)
+                innerY = i % (partSizeY + 1)
+            } else {
+                partY = yReminder + (i - longerPartY) / partSizeY;
+                innerY = (i - longerPartY) % partSizeY;
+            }
+
+            if (j < longerPartX) { //still in the part where partitions are longer along x
+                partX = j / (partSizeX + 1)
+                innerX = j % (partSizeX + 1)
+            } else {
+                partX = xReminder + (j - longerPartX) / partSizeX;
+                innerX = (j - longerPartX) % partSizeX;
+            }
+            dAij(partitions[partY * edgeCount + partX][fi], innerY, innerX) = dAij(frames[fi], i, j);
+        }
+    }
+}
+
+void ProgMovieAlignmentDeformationModel::estimateLocalShifts(
+        const std::vector<std::vector<MultidimArray<double>>>& partitions,
+        std::vector<double>& shiftsX, std::vector<double>& shiftsY)
+{
+    double* currX, currY;
+    int partitionDepth = partitions[0].size();
+    for (int i = 0; i < partitions.size(); i++) {
+        currX = shiftsX.front() + partitionDepth * i;
+        currY = shiftsY.front() + partitionDepth * i;
+        estimateShifts(partitions[i], currX, currY, this->maxIterations);
+    }
+}
+
+void ProgMovieAlignmentDeformationModel::calculateModelCoefficients(const std::vector<double>& shiftsX,
+        const std::vector<double>& shiftsY, const std::vector<double>& timeStamps, std::vector<double>& coeffsX,
+        std::vector<double>& coeffsY)
+{
+
 }
 
 void ProgMovieAlignmentDeformationModel::motionCorrect(const std::vector<MultidimArray<double>>& input,
