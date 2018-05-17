@@ -31,6 +31,8 @@
 #include "data/metadata_extension.h"
 #include "data/xmipp_fftw.h"
 #include "data/filters.h"
+#include <alglib/src/interpolation.h>
+#include <alglib/src/stdafx.h>
 
 
 /** Movie alignment correlation Parameters. */
@@ -52,6 +54,7 @@ private:
 
 	std::vector<double> localShiftsX;
 	std::vector<double> localShiftsY;
+	std::vector<std::vector<MultidimArray<double>>> partitions;
 
 	std::vector<double> deformationCoefficientsX;
 	std::vector<double> deformationCoefficientsY;
@@ -79,6 +82,16 @@ public:
 
 	void estimateShifts(const std::vector<MultidimArray<double>>& data, std::vector<double>& shiftsX,
 			std::vector<double>& shiftsY, int maxIterations=50, double minImprovement=0.1);
+	/**
+	 * @brief [brief description]
+	 * @details [long description]
+	 * 
+	 * @param c [description]
+	 * @param dim dim[0] - y, dim[1] - x, dim[2] - t
+	 * @param func [description]
+	 * @param ptr [description]
+	 */
+	static void calculateShift2(const alglib::real_1d_array &c, const alglib::real_1d_array &dim, double &func, void *ptr);
 	double calculateShift(double x, double y, double t, const std::vector<double>& c);
 	void applyShifts(std::vector<MultidimArray<double>>& data, const std::vector<double>& shiftsX,
 			const std::vector<double>& shiftsY);
@@ -112,8 +125,8 @@ public:
 	void estimateLocalShifts(const std::vector<std::vector<MultidimArray<double>>>& partitions,
 			std::vector<double>& shiftsX, std::vector<double>& shiftsY);
 
-	void calculateModelCoefficients(const std::vector<double>& shiftsX, const std::vector<double>& shiftsY,
-			const std::vector<double>& timeStamps, std::vector<double>& coeffsX, std::vector<double>& coeffsY);
+	void calculateModelCoefficients(const std::vector<double>& shifts, const std::vector<double>& timeStamps,
+			std::vector<double>& coeffs, int frameHeight, int frameWidth);
 
 	void motionCorrect(const std::vector<MultidimArray<double>>& input, std::vector<MultidimArray<double>>& output,
 			const std::vector<double>& timeStamps, const std::vector<double>& cx, const std::vector<double>& cy);
@@ -121,6 +134,9 @@ public:
 			const std::vector<double>& cx, const std::vector<double>& cy, double t1, double t2);
 
 	void averageFrames(const std::vector<MultidimArray<double>>& data, MultidimArray<double>& out);
+
+	void calculatePartitionSize(int partIndex, int edgeCount, int frameHeight, int frameWidth, int& partXSize,
+			int& partYSize);
 };
 
 #endif

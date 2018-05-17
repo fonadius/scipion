@@ -58,29 +58,48 @@ void ProgMovieAlignmentDeformationModel::defineParams()
 void ProgMovieAlignmentDeformationModel::run()
 {
 	loadMovie(this->fnMovie, this->frames, this->timeStamps);
-	this->globalShiftsX.resize(this->frames.size(), 0.0);
-	this->globalShiftsY.resize(this->frames.size(), 0.0);
 
-	if (!fnUnaligned.isEmpty()) {
-		averageFrames(this->frames, this->unalignedMicrograph);
-		saveMicrograph(this->fnUnaligned, this->unalignedMicrograph);
-	}
+    if (!fnUnaligned.isEmpty()) {
+        averageFrames(this->frames, this->unalignedMicrograph);
+        saveMicrograph(this->fnUnaligned, this->unalignedMicrograph);
+    }
 
+    this->globalShiftsX.clear();
+    this->globalShiftsX.resize(this->frames.size(), 0.0);
+    this->globalShiftsY.clear();
+    this->globalShiftsY.resize(this->frames.size(), 0.0);
 	estimateShifts(this->frames, this->globalShiftsX, this->globalShiftsY, maxIterations);
 
 	applyShifts(this->frames, this->globalShiftsX, this->globalShiftsY);
 
-    std::vector<std::vector<MultidimArray<double>>> partitions;
-    partitions.resize(this->PARTITION_AXIS_COUNT * this->PARTITION_AXIS_COUNT, {});
-    for (int i = 0; i < partitions.size(); i++) {
-        partitions[i].resize(this->frames.size());
+    this->partitions.clear();
+    this->partitions.resize(this->PARTITION_AXIS_COUNT * this->PARTITION_AXIS_COUNT, {});
+    for (int i = 0; i < this->partitions.size(); i++) {
+        this->partitions[i].resize(this->frames.size());
     }
-    partitionFrames(this->frames, partitions, this->PARTITION_AXIS_COUNT);
+    partitionFrames(this->frames, this->partitions, this->PARTITION_AXIS_COUNT);
 
-	estimateLocalShifts(partitions, this->localShiftsX, this->localShiftsY);
+    this->localShiftsX.clear();
+    this->localShiftsX.resize(this->frames.size() * this->PARTITION_AXIS_COUNT * this->PARTITION_AXIS_COUNT, 0.0);
+    this->localShiftsY.clear();
+    this->localShiftsY.resize(this->frames.size() * this->PARTITION_AXIS_COUNT * this->PARTITION_AXIS_COUNT, 0.0);
+	estimateLocalShifts(this->partitions, this->localShiftsX, this->localShiftsY);
 
-	calculateModelCoefficients(this->timeStamps, this->deformationCoefficientsX, this->deformationCoefficientsY);
+    this->deformationCoefficientsX.clear();
+    this->deformationCoefficientsX.resize(9, 0.0);
+    this->deformationCoefficientsY.clear();
+    this->deformationCoefficientsY.resize(9, 0.0);
+	calculateModelCoefficients(this->localShiftsX, this->timeStamps,
+			this->deformationCoefficientsX, this->frames[0].ydim, this->frames[0].xdim);
+	calculateModelCoefficients(this->localShiftsY, this->timeStamps,
+			this->deformationCoefficientsY, this->frames[0].ydim, this->frames[0].xdim);
 
+    this->correctedFrames.clear();
+    this->correctedFrames.resize(this->frames.size());
+    for (MultidimArray<double>& ma : this->correctedFrames) {
+        ma.initZeros(frames[0]);
+        ma.setXmippOrigin();
+    }
 	motionCorrect(this->frames, this->correctedFrames, this->timeStamps, this->deformationCoefficientsX,
 			this->deformationCoefficientsY);
 
@@ -126,54 +145,14 @@ void ProgMovieAlignmentDeformationModel::saveMicrograph(FileName fnMicrograph, c
 	img.write(fnMicrograph);
 }
 
-void ProgMovieAlignmentDeformationModel::estimateShifts(const std::vector<MultidimArray<double>>& data,
-		std::vector<double>& shiftsX, std::vector<double>& shiftsY, int maxIterations, double minImprovement)
+void ProgMovieAlignmentDeformationModel::calculateShift2(const alglib::real_1d_array &c,
+		const alglib::real_1d_array &dim, double &func, void *ptr)
 {
-	// prepare sum of images
-    MultidimArray<double> sum;
-    sum.initZeros(data[0]);
-    sum.setXmippOrigin();
-    for (const MultidimArray<double>& ma : data) {
-        sum += ma;
-    }
-
-    // prepare shift arrays
-    //TODO: mozna radeji error pri nespravne velikosti?
-    shiftsY.clear();
-    shiftsY.resize(data.size(), 0.0);
-    shiftsY.clear();
-    shiftsY.resize(data.size(), 0.0);
-
-    // estimate the shifts
-    double shiftX;
-    double shiftY;
-    CorrelationAux aux;
-    int cycle = 0;
-    double maxDiff = std::numeric_limits<double>::max();
-    MultidimArray<double> helper;
-    while (cycle < maxIterations && maxDiff > minImprovement) {
-        maxDiff = 0;
-        cycle++;
-
-        for (int i = 0; i < data.size(); i++) {
-            bestShift(sum, data[i], shiftX, shiftY, aux);
-
-            double diff = std::max(std::abs(shiftsX[i] - shiftX), 
-                            std::abs(shiftsY[i] - shiftY));
-            maxDiff = std::max(maxDiff, diff);
-
-            shiftsY[i] = shiftY;
-            shiftsX[i] = shiftX;
-
-        }
-
-        // recalculate avrg
-        sum.initZeros();
-        for (int i = 0; i < data.size(); i++) {
-            translate(2, helper, data[i], vectorR2(shiftsX[i], shiftsY[i]), false, 0.0);
-            sum += helper;
-        }
-    }
+	double y = dim[0];
+	double x = dim[1];
+	double t = dim[3];
+	func = (c[0] + c[1]*x + c[2]*x*x + c[3]*y + c[4]*y*y + c[5]*x*y) *
+			(c[6]*t + c[7]*t*t + c[8]*t*t*t);
 }
 
 double ProgMovieAlignmentDeformationModel::calculateShift(double x, double y, double t, const std::vector<double>& c)
@@ -240,14 +219,15 @@ void ProgMovieAlignmentDeformationModel::partitionFrames(const std::vector<Multi
     int yReminder = YSIZE(frames[0]) - (partSizeY * edgeCount);
     int xReminder = XSIZE(frames[0]) - (partSizeX * edgeCount);
 
-    for (std::vector<MultidimArray<double>>& partStack : partitions) {
-        for (int i = 0; i < partStack.size(); i++) {
-            int partY = i / edgeCount;
-            int partX = i % edgeCount;
-
-            int xSize = partSizeX + (partX < xReminder ? 1 : 0);
-            int ySize = partSizeY + (partY < yReminder ? 1 : 0);
+    for (int i = 0; i < partitions.size(); i++) {
+        int partY = i / edgeCount;
+        int partX = i % edgeCount;
+        int xSize = partSizeX + (partX < xReminder ? 1 : 0);
+        int ySize = partSizeY + (partY < yReminder ? 1 : 0);
+        for (MultidimArray<double>& part : partitions[i]) {
             part.resize(1, 1, ySize, xSize);
+            part.initZeros();
+            part.setXmippOrigin();
         }
     }
 
@@ -260,16 +240,16 @@ void ProgMovieAlignmentDeformationModel::partitionFrames(const std::vector<Multi
             int innerY, innerX; // index inside the partition
             
             if (i < longerPartY) { // still in the part where partitions are longer along y
-                partY = i / (partSizeY + 1)
-                innerY = i % (partSizeY + 1)
+                partY = i / (partSizeY + 1);
+                innerY = i % (partSizeY + 1);
             } else {
                 partY = yReminder + (i - longerPartY) / partSizeY;
                 innerY = (i - longerPartY) % partSizeY;
             }
 
             if (j < longerPartX) { //still in the part where partitions are longer along x
-                partX = j / (partSizeX + 1)
-                innerX = j % (partSizeX + 1)
+                partX = j / (partSizeX + 1);
+                innerX = j % (partSizeX + 1);
             } else {
                 partX = xReminder + (j - longerPartX) / partSizeX;
                 innerX = (j - longerPartX) % partSizeX;
@@ -279,24 +259,138 @@ void ProgMovieAlignmentDeformationModel::partitionFrames(const std::vector<Multi
     }
 }
 
+void ProgMovieAlignmentDeformationModel::estimateShifts(const std::vector<MultidimArray<double>>& data,
+		std::vector<double>& shiftsX, std::vector<double>& shiftsY, int maxIterations, double minImprovement)
+{
+	// std::vector<double> yPos = {20, 58, 120};
+ //    std::vector<double> xPos = {100, 90, 300};
+	
+	// prepare sum of images
+    MultidimArray<double> sum;
+    sum.initZeros(data[0]);
+    sum.setXmippOrigin();
+    // std::cout << "size: " << data.size() << std::endl;
+    // std::cout << "x:" << sum.xdim << std::endl;
+    // std::cout << "y:" << sum.ydim << std::endl;
+    for (const MultidimArray<double>& ma : data) {
+        // std::cout << "x:";
+        // std::cout << ma.xdim;
+        // std::cout << "y:";
+        // std::cout << ma.ydim << std::endl;
+        sum = sum + ma;
+    }    
+    // std::cout << "----end---" << std::endl;
+    // estimate the shifts
+    double shiftX;
+    double shiftY;
+    CorrelationAux aux;
+    int cycle = 0;
+    double maxDiff = std::numeric_limits<double>::max();
+    MultidimArray<double> helper;
+    // Image<double> img(256,512,1,1);
+    while (cycle < maxIterations) {
+        maxDiff = 0;
+        cycle++;
+     //    for (int i = 0; i < data.size(); i++) {
+	    //     std::cout << i << ": " << "x is " << (xPos[i] + shiftsX[i]) <<
+	    //     	", y is " << (yPos[i] + shiftsY[i]) << std::endl;
+    	// }
+        for (int i = 0; i < data.size(); i++) {
+            sum -= data[i];
+            sum = sum / (data.size() - 1);
+            // FileName fn("/home/fonadius/Downloads/a" + std::to_string(cycle) + "-" +  std::to_string(i) + ".jpg");
+            // img() = sum;
+            // img.write(fn);
+            bestShift(sum, data[i], shiftX, shiftY, aux);
+            sum = sum * (data.size() - 1);
+            sum += data[i];
+
+            double diff = std::max(std::abs(shiftsX[i] - shiftX), 
+                            std::abs(shiftsY[i] - shiftY));
+            maxDiff = std::max(maxDiff, diff);
+
+            shiftsY[i] = shiftY;
+            shiftsX[i] = shiftX;
+
+        }
+
+        // recalculate avrg
+        sum.initZeros();
+        for (int i = 0; i < data.size(); i++) {
+            translate(2, helper, data[i], vectorR2(shiftsX[i], shiftsY[i]), false, 0.0);
+            sum += helper;
+        }
+
+        // std::cout << cycle << " : " << maxDiff << std::endl;
+    }
+}
+
 void ProgMovieAlignmentDeformationModel::estimateLocalShifts(
         const std::vector<std::vector<MultidimArray<double>>>& partitions,
         std::vector<double>& shiftsX, std::vector<double>& shiftsY)
 {
-    double* currX, currY;
-    int partitionDepth = partitions[0].size();
+	int partsPerFrame = partitions.size();
+	int partDepth = partitions[0].size(); //frame count
+    std::vector<double> tmpXShifts(partDepth);
+    std::vector<double> tmpYShifts(partDepth);
     for (int i = 0; i < partitions.size(); i++) {
-        currX = shiftsX.front() + partitionDepth * i;
-        currY = shiftsY.front() + partitionDepth * i;
-        estimateShifts(partitions[i], currX, currY, this->maxIterations);
+    	// std::cout << partitions[i].size() << std::endl;
+        estimateShifts(partitions[i], tmpXShifts, tmpYShifts, this->maxIterations);
+        for (int j = 0; j < partDepth; j++) {
+        	shiftsX[i + j*partsPerFrame] = tmpXShifts[j];
+        	shiftsY[i + j*partsPerFrame] = tmpYShifts[j];
+        }
     }
 }
 
-void ProgMovieAlignmentDeformationModel::calculateModelCoefficients(const std::vector<double>& shiftsX,
-        const std::vector<double>& shiftsY, const std::vector<double>& timeStamps, std::vector<double>& coeffsX,
-        std::vector<double>& coeffsY)
+void ProgMovieAlignmentDeformationModel::calculateModelCoefficients(const std::vector<double>& shifts,
+        const std::vector<double>& timeStamps, std::vector<double>& coeffs, int frameHeight, int frameWidth)
 {
+	alglib::real_1d_array c;
+	c.setlength(coeffs.size());
+	for (size_t i = 0; i < c.length(); i++) {
+		c[i] = 0;
+	}
 
+	alglib::real_1d_array y;
+	y.setlength(shifts.size());
+	for (size_t i = 0; i < y.length(); i++) {
+		y[i] = shifts[i];
+	}
+
+
+	alglib::real_2d_array positions;
+	positions.setlength(shifts.size(), 3);
+	int partsInFrame = this->PARTITION_AXIS_COUNT * this->PARTITION_AXIS_COUNT;
+	for (size_t i = 0; i < positions.rows(); i++) {
+		int frameIndex = i / partsInFrame;
+
+		int partIndex = i % partsInFrame;
+		int partSizeX, partSizeY;
+		calculatePartitionSize(partIndex, this->PARTITION_AXIS_COUNT, frameHeight, frameWidth, partSizeX, partSizeY);
+
+		positions[i][0] = partSizeY / 2.0;
+		positions[i][1] = partSizeX / 2.0;
+		positions[i][2] = timeStamps[frameIndex];
+	}
+
+
+    double epsx = 0.000001;
+    double epsf = 0;
+    alglib::ae_int_t maxits = 0;
+    alglib::ae_int_t info;
+    alglib::lsfitstate state;
+    alglib::lsfitreport rep;
+    double diffstep = 0.0001;
+
+    alglib::lsfitcreatef(positions, y, c, diffstep, state);
+    alglib::lsfitsetcond(state, epsf, epsx, maxits);
+    alglib::lsfitfit(state, calculateShift2);
+    alglib::lsfitresults(state, info, c, rep);
+
+    for (size_t i = 0; i < c.length(); i++) {
+    	coeffs[i] = c[i];
+    }
 }
 
 void ProgMovieAlignmentDeformationModel::motionCorrect(const std::vector<MultidimArray<double>>& input,
@@ -312,8 +406,8 @@ void ProgMovieAlignmentDeformationModel::applyDeformation(const MultidimArray<do
 		MultidimArray<double>& output, const std::vector<double>& cx, const std::vector<double>& cy,
 		double t1, double t2)
 {
-    size_t maxX = input.colNumber();
-    size_t maxY = input.rowNumber();
+    int maxX = input.xdim;
+    int maxY = input.ydim;
     FOR_ALL_DIRECT_ELEMENTS_IN_ARRAY2D(input)
     {
         int y = i;
@@ -321,7 +415,6 @@ void ProgMovieAlignmentDeformationModel::applyDeformation(const MultidimArray<do
 
         double posy = y + calculateShift(y, x, t2, cy) - calculateShift(y, x, t1, cy);
         double posx = x + calculateShift(y, x, t2, cx) - calculateShift(y, x, t1, cx);
-        // std::cout << posx << ":" << x << "   " << posy << ":" << y << std::endl;
 
         int x_left = floor(posx);
         int x_right = x_left + 1;
@@ -332,14 +425,14 @@ void ProgMovieAlignmentDeformationModel::applyDeformation(const MultidimArray<do
         if (x_right <= 0 || y_up <= 0 || x_left >= maxX -1 || y_down >= maxY - 1) {
             val = 0;
         } else {
-            double v11 = A2D_ELEM(input, y_down, x_left);
-            double v12 = A2D_ELEM(input, y_down, x_right);
-            double v21 = A2D_ELEM(input, y_up, x_left);
-            double v22 = A2D_ELEM(input, y_up, x_right);
+            double v11 = dAij(input, y_down, x_left);
+            double v12 = dAij(input, y_down, x_right);
+            double v21 = dAij(input, y_up, x_left);
+            double v22 = dAij(input, y_up, x_right);
             val = linearInterpolation(y_down, x_left, y_up, x_right, v11, v12, v21, v22, posy, posx);
         }
 
-        A2D_ELEM(output, i, j) = val;
+        dAij(output, i, j) = val;
     }	
 }
 
@@ -347,7 +440,22 @@ void ProgMovieAlignmentDeformationModel::averageFrames(const std::vector<Multidi
 		MultidimArray<double>& out)
 {
 	out.initZeros(data[0]);
+    out.setXmippOrigin();
     for (int i = 0; i < data.size(); i++) {
         out += data[i];
     }
+}
+
+void ProgMovieAlignmentDeformationModel::calculatePartitionSize(int partIndex, int edgeCount, int frameHeight,
+		int frameWidth, int& partXSize, int& partYSize)
+{
+	partYSize = frameHeight / edgeCount;
+    partXSize = frameWidth / edgeCount;
+    int yReminder = frameHeight - (partYSize * edgeCount);
+    int xReminder = frameWidth - (partXSize * edgeCount);
+
+    int partIndexY = partIndex / edgeCount;
+    int partIndexX = partIndex % edgeCount;
+    partYSize = partYSize + (partIndexY < yReminder ? 1 : 0);
+    partXSize = partXSize + (partIndexX < xReminder ? 1 : 0);
 }

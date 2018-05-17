@@ -86,43 +86,79 @@ void addSquare(MultidimArray<double>& input, int edgeSize, int y, int x) {
 
 // }
 
-TEST_F(myMotioncorrTest, testPartitioning) {
-    int partitionCount = 5;
-    std::vector<MultidimArray<double>> frames;
-    frames.resize(10);
-    for (MultidimArray<double>& frame) {
-        frame.resize(1, 1, 112, 98);
-    }
+// TEST_F(myMotioncorrTest, testPartitioning) {
+//     //prepare frame data
+//     int partitionCount = 5;
+//     std::vector<MultidimArray<double>> frames;
+//     frames.resize(10);
+//     bool first = true;
+//     int width = 112;
+//     int height = 98;
 
-    std::vector<std::vector<MultidimArray<double>>> partitions;
-    partitions.resize(partitionCount * partitionCount, {});
-    for (int i = 0; i < partitions.size(); i++) {
-        partitions[i].resize(this->frames.size());
-    }
+//     int partSizeY = height / partitionCount;
+//     int partSizeX = width / partitionCount;
+//     int yReminder = height - (partSizeY * partitionCount);
+//     int xReminder = width - (partSizeX * partitionCount);
+//     int longerPartY = yReminder * (partSizeY + 1);
+//     int longerPartX = xReminder * (partSizeX + 1);
+//     for (MultidimArray<double>& frame : frames) {
+//         frame.resize(height, width);
+//         FOR_ALL_DIRECT_ELEMENTS_IN_ARRAY2D(frame) {
+//             int partYIndex, partXIndex;
+//             if (i < longerPartY) { // still in the part where partitions are longer along y
+//                 partYIndex = i / (partSizeY + 1);
+//             } else {
+//                 partYIndex = yReminder + (i - longerPartY) / partSizeY;
+//             }
+//             if (j < longerPartX) { //still in the part where partitions are longer along x
+//                 partXIndex = j / (partSizeX + 1);
+//             } else {
+//                 partXIndex = xReminder + (j - longerPartX) / partSizeX;
+//             }
+//             dAij(frame, i, j) = partYIndex * partitionCount + partXIndex;
+//         };
+//     }
 
-    ProgMovieAlignmentDeformationModel pmadm;
-    pmadm.partitionFrames(frames, partitions, partitionCount);
+//     //prepare partition data. After this the vectors should have correct sizes
+//     std::vector<std::vector<MultidimArray<double>>> partitions;
+//     partitions.resize(partitionCount * partitionCount, {});
+//     for (int i = 0; i < partitions.size(); i++) {
+//         partitions[i].resize(frames.size());
+//     }
 
-    //check sizes
-    ASSERT_EQ(partitions.size(), partitionCount * partitionCount);
-    for (std::vector<MultidimArray<double>>& partStack : partitions) {
-        ASSERT_EQ(partStack.size(), frames.size());
-        for (int i = 0; i < partStack.size(); i++) {
-            int indexY = ;
-            int indexX = ;
-            if (indexX < 2) {
-                ASSERT_EQ(XSIZE(partStack[i]), 23);
-            } else {
-                ASSERT_EQ(XSIZE(partStack[i]), 22);
-            }
-            if (indexY < 3) {
-                ASSERT_EQ(YSIZE(partStack[i]), 20);
-            } else {
-                ASSERT_EQ(YSIZE(partStack[i]), 19);
-            }
-        }
-    }
-}
+//     ProgMovieAlignmentDeformationModel pmadm;
+//     pmadm.partitionFrames(frames, partitions, partitionCount);
+
+//     //check correct partition sizes
+//     ASSERT_EQ(partitions.size(), partitionCount * partitionCount);
+//     for (int i = 0; i < partitions.size(); i++) {
+//         ASSERT_EQ(partitions[i].size(), frames.size());
+//         int indexY = i / partitionCount;
+//         int indexX = i % partitionCount;
+//         for (const MultidimArray<double>& part : partitions[i]) {
+//             ASSERT_EQ(1, NSIZE(part));
+//             ASSERT_EQ(1, ZSIZE(part));
+//             if (indexX < 2) {
+//                 ASSERT_EQ(23, XSIZE(part));
+//             } else {
+//                 ASSERT_EQ(22, XSIZE(part));
+//             }
+//             if (indexY < 3) {
+//                 ASSERT_EQ(20, YSIZE(part));
+//             } else {
+//                 ASSERT_EQ(19, YSIZE(part));
+//             }
+//         }
+//     }
+
+//     //check for correct partition values
+//     for (int i = 0; i < partitions.size(); i++) {
+//         for (MultidimArray<double>& part : partitions[i]) {
+//             int countCorrect = part.countThreshold("range", i - 0.1, i + 0.1);
+//             ASSERT_EQ(NZYXSIZE(part), countCorrect);
+//         }
+//     }
+// }
 
 //TODO:
 // TEST_F(myMotioncorrTest, testMultipleShifts) {
@@ -166,40 +202,40 @@ TEST_F(myMotioncorrTest, testPartitioning) {
 //     sumImg.write(fn);
 // }
 
-//TODO:
-// TEST_F(myMotioncorrTest, testShiftAndTranslation)
-// {
-//     size_t height = 256;
-//     size_t width = 512;
-//     size_t edge = 25;
-//     Image<double> img1(height, width, 1, 1);
-//     Image<double> img2(height, width, 1, 1);
 
-//     addSquare(img1(), edge, 20, 100);
-//     addSquare(img2(), edge, 58, 90);
+TEST_F(myMotioncorrTest, testShiftAndTranslation)
+{
+    size_t height = 256;
+    size_t width = 512;
+    size_t edge = 25;
+    std::vector<double> xPos = {100, 90, 300};
+    std::vector<double> yPos = {20, 58, 120};
+    Image<double> img1(height, width, 1, 1);
+    Image<double> img2(height, width, 1, 1);
+    Image<double> img3(height, width, 1, 1);
+    addSquare(img1(), edge, yPos[0], xPos[0]);
+    addSquare(img2(), edge, yPos[1], xPos[1]);
+    addSquare(img3(), edge, yPos[2], xPos[2]);
+    img1().setXmippOrigin();
+    img2().setXmippOrigin();
+    img3().setXmippOrigin();
+    std::vector<MultidimArray<double>> data = {img1(), img2(), img3()};
+    std::vector<double> shiftsX(data.size(), 0);
+    std::vector<double> shiftsY(data.size(), 0);
 
-//     img1().setXmippOrigin();
-//     img2().setXmippOrigin();
+    ProgMovieAlignmentDeformationModel pmadm;
+    pmadm.estimateShifts(data, shiftsX, shiftsY, 50, 0.1);
 
-//     CorrelationAux aux;
-//     double shiftX;
-//     double shiftY;
-//     bestShift(img1(), img2(), shiftX, shiftY, aux);
-    
+    // for (int i = 0; i < data.size(); i++) {
+    //     std::cout << i << ": " << "x is " << (xPos[i] + shiftsX[i]) <<
+    //     ", y is " << (yPos[i] + shiftsY[i]) << std::endl;
+    // }
 
-//     ASSERT_NEAR(shiftY, -38, 1e-10);
-//     ASSERT_NEAR(shiftX, 10, 1e-10);
-
-//     Image<double> img2Shifted(height, width, 1, 1);
-//     img2Shifted().setXmippOrigin();
-//     translate(2, img2Shifted(), img2(), vectorR2(shiftX, shiftY), false, 0.0);
-
-//     Image<double> result(height, width, 1, 1);
-//     result() = img1() + img2Shifted();
-//     size_t nonZeroPixels = result().countThreshold("above", 0.1, 0.0);
-//     ASSERT_EQ(nonZeroPixels, edge*edge);
-    
-// }
+    for (int i = 1; i < data.size(); i++) {
+        ASSERT_NEAR(xPos[0] + shiftsX[0], xPos[i] + shiftsX[i], 1e-10);
+        ASSERT_NEAR(yPos[0] + shiftsY[0], yPos[i] + shiftsY[i], 1e-10);
+    }
+}
 
 
 
@@ -226,35 +262,35 @@ TEST_F(myMotioncorrTest, testPartitioning) {
 //     img2.write(deformedFile);
 // }
 
-TEST_F(myMotioncorrTest, interpolationTest) 
-{
-    // In form (y1, x1, y2, x2, v11, v12, v21, v22, y, x, expected)
-    // In form (q11, q12, q21, q22, y, x, expected)
-    std::vector<double> knownValues = {
-        // all points are one point
-        5.5, 5.5, 5.5, 5.5, 12.3, 12.3, 12.3, 12.3, 5.5, 5.5, 12.3,
-        // all points lie on the same x coordinates
-        1, 1, 2, 1, 1, 1, 3, 3, 1.5, 1.5, 2,
-        // all points lie on the same y coordinates
-        8, 8, 8, 11, 2, 4, 2, 4, 8, 10, 3 + 1.0/3.0,
-        // point in the middle
-        1, 1, 4, 4, 1, 1, 2, 2, 2.5, 2.5, 1.5,
-        // normal points
-        2.1, 1, 4.8, 3.62, 3.5, 1, 2, 4, 3.2, 2.5, 2.5072094995759118,
-        1, 3.12, 5.6, 12, 1, -2, 9.8, 5.1, 1.12, 10, -1.1291186839012923,
-        8.13, 4.82, 22.65, 4.99, 19, 17, 5, 24, 20.1, 4.87, 11.962202236266407
-    };
+// TEST_F(myMotioncorrTest, interpolationTest) 
+// {
+//     // In form (y1, x1, y2, x2, v11, v12, v21, v22, y, x, expected)
+//     // In form (q11, q12, q21, q22, y, x, expected)
+//     std::vector<double> knownValues = {
+//         // all points are one point
+//         5.5, 5.5, 5.5, 5.5, 12.3, 12.3, 12.3, 12.3, 5.5, 5.5, 12.3,
+//         // all points lie on the same x coordinates
+//         1, 1, 2, 1, 1, 1, 3, 3, 1.5, 1.5, 2,
+//         // all points lie on the same y coordinates
+//         8, 8, 8, 11, 2, 4, 2, 4, 8, 10, 3 + 1.0/3.0,
+//         // point in the middle
+//         1, 1, 4, 4, 1, 1, 2, 2, 2.5, 2.5, 1.5,
+//         // normal points
+//         2.1, 1, 4.8, 3.62, 3.5, 1, 2, 4, 3.2, 2.5, 2.5072094995759118,
+//         1, 3.12, 5.6, 12, 1, -2, 9.8, 5.1, 1.12, 10, -1.1291186839012923,
+//         8.13, 4.82, 22.65, 4.99, 19, 17, 5, 24, 20.1, 4.87, 11.962202236266407
+//     };
 
-    ProgMovieAlignmentDeformationModel padm;
+//     ProgMovieAlignmentDeformationModel padm;
 
-    for (int i = 0; i < knownValues.size(); i+=11)
-    {
-        double* item = &knownValues.front() + i;
-        double result = padm.linearInterpolation(item[0], item[1], item[2], item[3], item[4],
-            item[5], item[6], item[7], item[8], item[9]);
-        ASSERT_NEAR(result, item[10], 1e-12);
-    }
-}
+//     for (int i = 0; i < knownValues.size(); i+=11)
+//     {
+//         double* item = &knownValues.front() + i;
+//         double result = padm.linearInterpolation(item[0], item[1], item[2], item[3], item[4],
+//             item[5], item[6], item[7], item[8], item[9]);
+//         ASSERT_NEAR(result, item[10], 1e-12);
+//     }
+// }
 
 GTEST_API_ int main(int argc, char **argv)
 {

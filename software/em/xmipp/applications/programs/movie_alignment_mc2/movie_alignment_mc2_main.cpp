@@ -6,5 +6,5 @@ int main(int argc, char **argv)
 {
     ProgMovieAlignmentDeformationModel padm;
     padm.read(argc, argv);
-    padm.run();
+    padm.tryRun();
 }
