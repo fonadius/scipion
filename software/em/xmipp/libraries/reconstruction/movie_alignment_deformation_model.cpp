@@ -31,6 +31,7 @@ void ProgMovieAlignmentDeformationModel::readParams()
 	fnMovie = getParam("-i");
 	fnMicrograph = getParam("-o");
     maxIterations = getIntParam("--maxIterations");
+    upScaling = getIntParam("--upscaling");
     fnUnaligned = getParam("--ounaligned");
     show();
 }
@@ -43,6 +44,7 @@ void ProgMovieAlignmentDeformationModel::show()
     << "Input movie:          " << fnMovie           << std::endl
     << "Output micrograph:    " << fnMicrograph      << std::endl
     << "Max iterations:       " << maxIterations     << std::endl
+    << "Up scaling coef.:     " << upScaling         << std::endl
 	<< "Unaligned micrograph: " << fnUnaligned       << std::endl;
 }
 
@@ -52,11 +54,13 @@ void ProgMovieAlignmentDeformationModel::defineParams()
     addParamsLine("   -i <metadata>               : Metadata with the list of frames to align");
     addParamsLine("   -o <fn=\"\"> 		          : Give the name of a micrograph to generate an aligned micrograph");
     addParamsLine("  [--maxIterations <N=5>]	  : Number of robust least squares iterations");
+    addParamsLine("  [--upscaling <N=1>]         : UpScaling coefficient for super resolution image generated from model application");
     addParamsLine("  [--ounaligned <fn=\"\">]     : Give the name of a micrograph to generate an unaligned (initial) micrograph");
 }
 
 void ProgMovieAlignmentDeformationModel::run()
 {
+    std::cout << "UPPPP" << upScaling << std::endl;
 	loadMovie(this->fnMovie, this->frames, this->timeStamps);
 
     if (!fnUnaligned.isEmpty()) {
@@ -97,11 +101,22 @@ void ProgMovieAlignmentDeformationModel::run()
     this->correctedFrames.clear();
     this->correctedFrames.resize(this->frames.size());
     for (MultidimArray<double>& ma : this->correctedFrames) {
-        ma.initZeros(frames[0]);
+        ma.resize(1, 1, this->frames[0].ydim * this->upScaling, this->frames[0].xdim * this->upScaling);
+        ma.initZeros();
         ma.setXmippOrigin();
     }
 	motionCorrect(this->frames, this->correctedFrames, this->timeStamps, this->deformationCoefficientsX,
 			this->deformationCoefficientsY);
+
+    for (int i = 0; i < correctedFrames.size(); i++) {
+        Image<double> img;
+        img() = correctedFrames[i];
+        img.write("/home/fonadius/Downloads/" + std::to_string(i) + ".jpg");
+        // for (int j = 0; j < 25; j++) {
+        //     std::cout << this->localShiftsX[j] << ",";
+        // }
+        // std::cout << std::endl;
+    }
 
 	averageFrames(this->correctedFrames, this->correctedMicrograph);
 
@@ -150,7 +165,7 @@ void ProgMovieAlignmentDeformationModel::calculateShift2(const alglib::real_1d_a
 {
 	double y = dim[0];
 	double x = dim[1];
-	double t = dim[3];
+	double t = dim[2];
 	func = (c[0] + c[1]*x + c[2]*x*x + c[3]*y + c[4]*y*y + c[5]*x*y) *
 			(c[6]*t + c[7]*t*t + c[8]*t*t*t);
 }
@@ -329,6 +344,8 @@ void ProgMovieAlignmentDeformationModel::estimateLocalShifts(
         const std::vector<std::vector<MultidimArray<double>>>& partitions,
         std::vector<double>& shiftsX, std::vector<double>& shiftsY)
 {
+    //shiftsX and shiftsY contains shifts for all partitions []
+    //shifts are organized 
 	int partsPerFrame = partitions.size();
 	int partDepth = partitions[0].size(); //frame count
     std::vector<double> tmpXShifts(partDepth);
@@ -349,7 +366,7 @@ void ProgMovieAlignmentDeformationModel::calculateModelCoefficients(const std::v
 	alglib::real_1d_array c;
 	c.setlength(coeffs.size());
 	for (size_t i = 0; i < c.length(); i++) {
-		c[i] = 0;
+		c[i] = 1;
 	}
 
 	alglib::real_1d_array y;
@@ -362,25 +379,36 @@ void ProgMovieAlignmentDeformationModel::calculateModelCoefficients(const std::v
 	alglib::real_2d_array positions;
 	positions.setlength(shifts.size(), 3);
 	int partsInFrame = this->PARTITION_AXIS_COUNT * this->PARTITION_AXIS_COUNT;
+    int curFrame = -1;
+    double cummulativeX, cummulativeY;
+    int partSizeX, partSizeY;
 	for (size_t i = 0; i < positions.rows(); i++) {
 		int frameIndex = i / partsInFrame;
-
 		int partIndex = i % partsInFrame;
-		int partSizeX, partSizeY;
-		calculatePartitionSize(partIndex, this->PARTITION_AXIS_COUNT, frameHeight, frameWidth, partSizeX, partSizeY);
+        if (partIndex == 0) { //starting next frame
+            cummulativeY = 0;
+            cummulativeX = 0;
+        } else if (partIndex % PARTITION_AXIS_COUNT == 0) { // new partition line
+            cummulativeX = 0;
+            cummulativeY += partSizeY;
+        }
 
-		positions[i][0] = partSizeY / 2.0;
-		positions[i][1] = partSizeX / 2.0;
+        calculatePartitionSize(partIndex, this->PARTITION_AXIS_COUNT, frameHeight, frameWidth, partSizeX, partSizeY);
+
+		positions[i][0] = cummulativeY + (partSizeY / 2.0);
+		positions[i][1] = cummulativeX + (partSizeX / 2.0);
 		positions[i][2] = timeStamps[frameIndex];
+
+        cummulativeX += partSizeX;
 	}
 
 
-    double epsx = 0.000001;
-    double epsf = 0;
-    alglib::ae_int_t maxits = 0;
     alglib::ae_int_t info;
     alglib::lsfitstate state;
     alglib::lsfitreport rep;
+    double epsx = 0.000001;
+    double epsf = 0.000001;
+    alglib::ae_int_t maxits = 0;
     double diffstep = 0.0001;
 
     alglib::lsfitcreatef(positions, y, c, diffstep, state);

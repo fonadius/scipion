@@ -42,8 +42,9 @@ private:
 	//----Input arguments----
 	FileName fnMovie;		// Input movie data
 	FileName fnMicrograph;	// Output micrograph
-	int maxIterations = 50;	// Limits the number of iterations for shift calculation
+	int maxIterations = 10;	// Limits the number of iterations for shift calculation (Default value taken from Unblur)
 	FileName fnUnaligned;	// Micrograph calculated from unaligned frames
+	int upScaling = 1;
 
 	//----Internal data-----
 	std::vector<MultidimArray<double>> frames;
