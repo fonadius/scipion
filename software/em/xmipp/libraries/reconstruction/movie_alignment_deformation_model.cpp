@@ -33,6 +33,7 @@ void ProgMovieAlignmentDeformationModel::readParams()
     maxIterations = getIntParam("--maxIterations");
     upScaling = getIntParam("--upscaling");
     fnUnaligned = getParam("--ounaligned");
+    threadNumbers = getIntParam("-j");
     fnDark = getParam("--dark");
     fnGain = getParam("--gain");
     show();
@@ -48,6 +49,7 @@ void ProgMovieAlignmentDeformationModel::show()
     << "Max iterations:       " << maxIterations     << std::endl
     << "Up scaling coef.:     " << upScaling         << std::endl
 	<< "Unaligned micrograph: " << fnUnaligned       << std::endl
+    << "Threads number:       " << threadNumbers     << std::endl
     << "Dark image:           " << fnDark            << std::endl
     << "Gain image:           " << fnGain            << std::endl;
 }
@@ -60,6 +62,7 @@ void ProgMovieAlignmentDeformationModel::defineParams()
     addParamsLine("  [--maxIterations <N=5>]	  : Number of robust least squares iterations");
     addParamsLine("  [--upscaling <N=1>]          : UpScaling coefficient for super resolution image generated from model application");
     addParamsLine("  [--ounaligned <fn=\"\">]     : Give the name of a micrograph to generate an unaligned (initial) micrograph");
+    addParamsLine("  [-j <N=5>]                   : Maximum threads the program is allowed to use");
     addParamsLine("  [--dark <fn=\"\">]           : Dark correction image");
     addParamsLine("  [--gain <fn=\"\">]           : Gain correction image");
 }

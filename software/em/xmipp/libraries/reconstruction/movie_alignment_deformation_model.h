@@ -45,6 +45,7 @@ private:
 	int maxIterations = 10;	// Limits the number of iterations for shift calculation (Default value taken from Unblur)
 	FileName fnUnaligned;	// Micrograph calculated from unaligned frames
 	int upScaling = 1;
+    int threadNumer = 5;
 	FileName fnGain;
 	FileName fnDark;
 
