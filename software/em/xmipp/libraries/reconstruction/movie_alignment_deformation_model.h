@@ -45,6 +45,8 @@ private:
 	int maxIterations = 10;	// Limits the number of iterations for shift calculation (Default value taken from Unblur)
 	FileName fnUnaligned;	// Micrograph calculated from unaligned frames
 	int upScaling = 1;
+	FileName fnGain;
+	FileName fnDark;
 
 	//----Internal data-----
 	std::vector<MultidimArray<double>> frames;
@@ -77,7 +79,8 @@ public:
     void run();
 
 public:
-	void loadMovie(FileName fnMovie, std::vector<MultidimArray<double>>& frames, std::vector<double>& timeStamps);
+	void loadMovie(FileName fnMovie, std::vector<MultidimArray<double>>& frames, std::vector<double>& timeStamps,
+			FileName fnDark, FileName fnGain);
 	void saveMicrograph(FileName fnMicrograph, const MultidimArray<double>& micrograph);
 	void saveCalculatedMetadata();
 
@@ -123,6 +126,8 @@ public:
 	void partitionFrames(const std::vector<MultidimArray<double>>& frames,
 			std::vector<std::vector<MultidimArray<double>>>& partitions, int edgeCount);
 
+	void downsampleFrame(MultidimArray<double>& in, MultidimArray<double>& out, int scalingFactor);
+
 	void estimateLocalShifts(const std::vector<std::vector<MultidimArray<double>>>& partitions,
 			std::vector<double>& shiftsX, std::vector<double>& shiftsY);
 
@@ -130,7 +135,8 @@ public:
 			std::vector<double>& coeffs, int frameHeight, int frameWidth);
 
 	void motionCorrect(const std::vector<MultidimArray<double>>& input, std::vector<MultidimArray<double>>& output,
-			const std::vector<double>& timeStamps, const std::vector<double>& cx, const std::vector<double>& cy);
+			const std::vector<double>& timeStamps, const std::vector<double>& cx, const std::vector<double>& cy,
+			int upScaling);
 	void applyDeformation(const MultidimArray<double>& input, MultidimArray<double>& output,
 			const std::vector<double>& cx, const std::vector<double>& cy, double t1, double t2);
 

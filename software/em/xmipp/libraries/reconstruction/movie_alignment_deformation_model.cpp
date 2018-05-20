@@ -33,6 +33,8 @@ void ProgMovieAlignmentDeformationModel::readParams()
     maxIterations = getIntParam("--maxIterations");
     upScaling = getIntParam("--upscaling");
     fnUnaligned = getParam("--ounaligned");
+    fnDark = getParam("--dark");
+    fnGain = getParam("--gain");
     show();
 }
 
@@ -45,7 +47,9 @@ void ProgMovieAlignmentDeformationModel::show()
     << "Output micrograph:    " << fnMicrograph      << std::endl
     << "Max iterations:       " << maxIterations     << std::endl
     << "Up scaling coef.:     " << upScaling         << std::endl
-	<< "Unaligned micrograph: " << fnUnaligned       << std::endl;
+	<< "Unaligned micrograph: " << fnUnaligned       << std::endl
+    << "Dark image:           " << fnDark            << std::endl
+    << "Gain image:           " << fnGain            << std::endl;
 }
 
 void ProgMovieAlignmentDeformationModel::defineParams()
@@ -54,14 +58,15 @@ void ProgMovieAlignmentDeformationModel::defineParams()
     addParamsLine("   -i <metadata>               : Metadata with the list of frames to align");
     addParamsLine("   -o <fn=\"\"> 		          : Give the name of a micrograph to generate an aligned micrograph");
     addParamsLine("  [--maxIterations <N=5>]	  : Number of robust least squares iterations");
-    addParamsLine("  [--upscaling <N=1>]         : UpScaling coefficient for super resolution image generated from model application");
+    addParamsLine("  [--upscaling <N=1>]          : UpScaling coefficient for super resolution image generated from model application");
     addParamsLine("  [--ounaligned <fn=\"\">]     : Give the name of a micrograph to generate an unaligned (initial) micrograph");
+    addParamsLine("  [--dark <fn=\"\">]           : Dark correction image");
+    addParamsLine("  [--gain <fn=\"\">]           : Gain correction image");
 }
 
 void ProgMovieAlignmentDeformationModel::run()
 {
-    std::cout << "UPPPP" << upScaling << std::endl;
-	loadMovie(this->fnMovie, this->frames, this->timeStamps);
+	loadMovie(this->fnMovie, this->frames, this->timeStamps, this->fnDark, this->fnGain);
 
     if (!fnUnaligned.isEmpty()) {
         averageFrames(this->frames, this->unalignedMicrograph);
@@ -101,33 +106,39 @@ void ProgMovieAlignmentDeformationModel::run()
     this->correctedFrames.clear();
     this->correctedFrames.resize(this->frames.size());
     for (MultidimArray<double>& ma : this->correctedFrames) {
-        ma.resize(1, 1, this->frames[0].ydim * this->upScaling, this->frames[0].xdim * this->upScaling);
-        ma.initZeros();
+        ma.initZeros(this->frames[0]);
         ma.setXmippOrigin();
     }
+    for (int i = 0; i < frames.size(); i++) {
+        frames[i].setXmippOrigin();
+    }
 	motionCorrect(this->frames, this->correctedFrames, this->timeStamps, this->deformationCoefficientsX,
-			this->deformationCoefficientsY);
+			this->deformationCoefficientsY, this->upScaling);;
 
     for (int i = 0; i < correctedFrames.size(); i++) {
         Image<double> img;
         img() = correctedFrames[i];
         img.write("/home/fonadius/Downloads/" + std::to_string(i) + ".jpg");
-        // for (int j = 0; j < 25; j++) {
-        //     std::cout << this->localShiftsX[j] << ",";
-        // }
-        // std::cout << std::endl;
     }
 
-	averageFrames(this->correctedFrames, this->correctedMicrograph);
+	averageFrames(this->frames, this->correctedMicrograph);
 
 	saveMicrograph(this->fnMicrograph, this->correctedMicrograph);
 }
 
 void ProgMovieAlignmentDeformationModel::loadMovie(FileName fnMovie, std::vector<MultidimArray<double>>& frames,
-		std::vector<double>& timeStamps)
+		std::vector<double>& timeStamps, FileName fnDark, FileName fnGain)
 {
     MetaData movie;
     movie.read(fnMovie, NULL, "movie_stack");
+
+    Image<double> dark, gain;
+    if (not this->fnDark.isEmpty()) {
+        dark.read(fnDark);
+    }
+    if (not this->fnGain.isEmpty()) {
+        gain.read(fnGain);
+    }
 
     MDRow  row;
     double time;
@@ -147,6 +158,14 @@ void ProgMovieAlignmentDeformationModel::loadMovie(FileName fnMovie, std::vector
             Image<double> frame;
             frame.read(fnFolder + fnFrame);
             frame().setXmippOrigin();
+
+            if (dark().xdim > 0) {
+                frame() -= dark();
+            }
+            if (gain().xdim > 0) {
+                frame() *= gain();
+            }
+
             frames.push_back(frame());
         } else {
             std::cerr << "Missing value of _image" << std::endl;
@@ -406,10 +425,10 @@ void ProgMovieAlignmentDeformationModel::calculateModelCoefficients(const std::v
     alglib::ae_int_t info;
     alglib::lsfitstate state;
     alglib::lsfitreport rep;
-    double epsx = 0.000001;
-    double epsf = 0.000001;
+    double epsx = 1e-12;
+    double epsf = 1e-12;
     alglib::ae_int_t maxits = 0;
-    double diffstep = 0.0001;
+    double diffstep = 0e-10;
 
     alglib::lsfitcreatef(positions, y, c, diffstep, state);
     alglib::lsfitsetcond(state, epsf, epsx, maxits);
@@ -423,11 +442,60 @@ void ProgMovieAlignmentDeformationModel::calculateModelCoefficients(const std::v
 
 void ProgMovieAlignmentDeformationModel::motionCorrect(const std::vector<MultidimArray<double>>& input,
 		std::vector<MultidimArray<double>>& output, const std::vector<double>& timeStamps,
-		const std::vector<double>& cx, const std::vector<double>& cy)
+		const std::vector<double>& cx, const std::vector<double>& cy, int scalingFactor)
 {
+    MultidimArray<double> helper;
+    helper.resize(input[0].ydim * scalingFactor, input[0].xdim * scalingFactor);
+    helper.setXmippOrigin();
 	for (int i = 0; i < input.size(); i++) {
-		applyDeformation(input[i], output[i], cx, cy, timeStamps[i], 0);
-	}
+        output[i].setXmippOrigin();
+        if (scalingFactor != 1) {
+    		applyDeformation(input[i], helper, cx, cy, timeStamps[i], 0);
+            downsampleFrame(helper, output[i], scalingFactor);
+        } else {
+            applyDeformation(input[i], output[i], cx, cy, timeStamps[i], 0);
+        }
+    }
+}
+
+void ProgMovieAlignmentDeformationModel::downsampleFrame(MultidimArray<double>& in, MultidimArray<double>& out,
+    int scalingFactor)
+{
+    int nThreads = 5;
+    double omin=0.,omax=0.;
+    in.computeDoubleMinMax(omin,omax);
+
+    FourierTransformer trInput;
+    trInput.setThreadsNumber(nThreads);
+    MultidimArray<std::complex<double>> inputReciprocal;
+    trInput.FourierTransform(in, inputReciprocal, false);
+
+    FourierTransformer trResult;
+    trResult.setThreadsNumber(nThreads);
+    trResult.setReal(out);
+    //TODO: is it calculated??
+    MultidimArray<std::complex<double> > resultReciprocal;
+    trResult.getFourierAlias(resultReciprocal);
+
+    // int ihalf=resultReciprocal.ydim / 2 + 1;
+    // for (int i=0; i<resultReciprocal.ydim; i++)
+    //     for (size_t j=0; j<resultReciprocal.xdim; j++)
+    //         A2D_ELEM(resultReciprocal,i,j)=A2D_ELEM(inputReciprocal,i,j);
+    // for (size_t i=ihalf; i<resultReciprocal.ydim; i++)
+    // {
+    //     size_t ip=inputReciprocal.ydim-resultReciprocal.ydim+i;
+    //     for (size_t j=0; j<resultReciprocal.xdim; j++)
+    //         A2D_ELEM(resultReciprocal,i,j)=A2D_ELEM(inputReciprocal,ip,j);
+    // }
+    for (int i = 0; i < resultReciprocal.ydim; i++) {
+        for (int j = 0; j < resultReciprocal.xdim; j++) {
+            dAij(resultReciprocal, i, j) = dAij(inputReciprocal, i*scalingFactor, j*scalingFactor);
+        }
+    }
+    trResult.inverseFourierTransform();
+
+    std::cout << omin << "," << omax << std::endl;
+    // out.rangeAdjust(omin, omax);
 }
 
 void ProgMovieAlignmentDeformationModel::applyDeformation(const MultidimArray<double>& input,
