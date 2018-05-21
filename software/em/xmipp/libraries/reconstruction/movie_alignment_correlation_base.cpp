@@ -371,16 +371,16 @@ int AProgMovieAlignmentCorrelation::findShiftsAndStore(
 	MultidimArray<double> lpf(newXdim / 2);
 	constructLPF(targetOccupancy, lpf);
 
-	// Compute the Fourier transform of all input images
 	size_t N = nlast - nfirst + 1; // no of images to process
 	Matrix2D<double> A(N * (N - 1) / 2, N - 1);
 	Matrix1D<double> bX(N * (N - 1) / 2), bY(N * (N - 1) / 2);
-	// Now compute all shifts
 	if (verbose)
 		std::cout << "Loading frames ..." << std::endl;
+	// Compute the Fourier transform of all input images
 	loadData(movie, dark, gain, targetOccupancy, lpf);
 	if (verbose)
 		std::cout << "Computing shifts between frames ..." << std::endl;
+	// Now compute all shifts
 	computeShifts(N, bX, bY, A);
 
 	Matrix1D<double> shiftX, shiftY;

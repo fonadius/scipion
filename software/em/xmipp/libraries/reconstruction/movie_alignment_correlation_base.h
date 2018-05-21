@@ -51,6 +51,20 @@ public:
     /// Run
     void run();
 
+protected:
+    template<typename T>
+    void scaleLPF(const MultidimArray<double>& lpf, int xSize, int ySize, double targetOccupancy, MultidimArray<T>& result) {
+		Matrix1D<double> w(2);
+		FOR_ALL_DIRECT_ELEMENTS_IN_ARRAY2D(result)
+		{
+			FFT_IDX2DIGFREQ(i, ySize, YY(w));
+			FFT_IDX2DIGFREQ(j, xSize, XX(w));
+			double wabs = w.module();
+			if (wabs <= targetOccupancy)
+				A2D_ELEM(result,i,j) = lpf.interpolatedElement1D(
+						wabs * xSize);
+		}
+    }
 
 private:
     virtual void loadData(const MetaData& movie, const Image<double>& dark,

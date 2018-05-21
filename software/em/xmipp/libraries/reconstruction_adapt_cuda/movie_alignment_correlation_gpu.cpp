@@ -105,15 +105,14 @@ void ProgMovieAlignmentCorrelationGPU::loadFrame(const MetaData& movie, size_t o
 void ProgMovieAlignmentCorrelationGPU::loadData(const MetaData& movie,
 		const Image<double>& dark, const Image<double>& gain,
 		double targetOccupancy, const MultidimArray<double>& lpf) {
+	// allocate space for data on CPU
 	Image<float> frame, gainF, darkF;
 	MultidimArray<float> filter;
-	// FIXME consider loading imgs in full size and cropping them on GPU
 	bool cropInput = (yDRcorner != -1);
-	// find input image size
-	gainF.data.resize(gain());
-	darkF.data.resize(dark());
 
-	int noOfImgs = nlast - nfirst + 1;
+	// copy image correction data, convert to float
+	gainF.data.resize(gain(), true);
+	darkF.data.resize(dark(), true);
 
 
 	int paddedSize = getBestSize(noOfImgs, newXdim);//results->at(0)->transform->X;
@@ -123,18 +122,7 @@ void ProgMovieAlignmentCorrelationGPU::loadData(const MetaData& movie,
 	newXdim = newYdim = paddedSize; // FIXME
 
 	// FIXME extract
-	Matrix1D<double> w(2);
-	filter.initZeros(newYdim, newXdim/2+1);
-	FOR_ALL_DIRECT_ELEMENTS_IN_ARRAY2D(filter)
-	{
-		FFT_IDX2DIGFREQ(i, newYdim, YY(w));
-		FFT_IDX2DIGFREQ(j, newXdim, XX(w));
-		double wabs = w.module();
-		if (wabs <= targetOccupancy)
-			A2D_ELEM(filter,i,j) = lpf.interpolatedElement1D(
-					wabs * newXdim);
-	}
-
+	filter.initZeros(paddedSizeY, paddedSizeX/2+1);
 
 	loadFrame(movie, movie.firstObject(), cropInput, frame);
 	int paddedLineLength = (frame.data.xdim/2+1)*2;
@@ -142,6 +130,7 @@ void ProgMovieAlignmentCorrelationGPU::loadData(const MetaData& movie,
 	float* imgs = new float[noOfFloats]();
 	std::cout << "noOfFloats: " << noOfFloats << std::endl;
 	int counter = -1;
+	scaleLPF(lpf, paddedSizeX, paddedSizeY, targetOccupancy, filter);
 	FOR_ALL_OBJECTS_IN_METADATA(movie) {
 		counter++;
 		if (counter < nfirst ) continue;

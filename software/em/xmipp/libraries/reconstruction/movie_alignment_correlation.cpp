@@ -35,7 +35,6 @@ void ProgMovieAlignmentCorrelation::loadData(const MetaData& movie,
 		const Image<double>& dark, const Image<double>& gain,
 		double targetOccupancy, const MultidimArray<double>& lpf) {
 	MultidimArray<double> filter;
-	Matrix1D<double> w(2);
 	FourierTransformer transformer;
 	bool firstImage = true;
 	int n = 0;
@@ -73,17 +72,9 @@ void ProgMovieAlignmentCorrelation::loadData(const MetaData& movie,
 			transformer.FourierTransform(reducedFrame(), *reducedFrameFourier,
 					true);
 			if (firstImage) {
-				filter.initZeros(*reducedFrameFourier);
-				FOR_ALL_DIRECT_ELEMENTS_IN_ARRAY2D(*reducedFrameFourier)
-				{
-					FFT_IDX2DIGFREQ(i, newYdim, YY(w));
-					FFT_IDX2DIGFREQ(j, newXdim, XX(w));
-					double wabs = w.module();
-					if (wabs <= targetOccupancy)
-						A2D_ELEM(filter,i,j) = lpf.interpolatedElement1D(
-								wabs * newXdim);
-				}
 				firstImage = false;
+				filter.initZeros(*reducedFrameFourier);
+				scaleLPF(lpf, newXdim, newYdim, targetOccupancy, filter);
 			}
 			for (size_t nn = 0; nn < filter.nzyxdim; ++nn) {
 				double wlpf = DIRECT_MULTIDIM_ELEM(filter, nn);

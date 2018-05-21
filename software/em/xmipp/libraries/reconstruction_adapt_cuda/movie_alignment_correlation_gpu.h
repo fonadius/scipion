@@ -49,6 +49,11 @@ private:
 
 private:
 	void loadFrame(const MetaData& movie, size_t objId, bool crop, Image<float>& out);
+
+	int fftBatchSize;
+	int paddedSizeX;
+	int paddedSizeY;
+
 };
 
 
