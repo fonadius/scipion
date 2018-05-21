@@ -118,12 +118,6 @@ void ProgMovieAlignmentDeformationModel::run()
 	motionCorrect(this->frames, this->correctedFrames, this->timeStamps, this->deformationCoefficientsX,
 			this->deformationCoefficientsY, this->upScaling);;
 
-    for (int i = 0; i < correctedFrames.size(); i++) {
-        Image<double> img;
-        img() = correctedFrames[i];
-        img.write("/home/fonadius/Downloads/" + std::to_string(i) + ".jpg");
-    }
-
 	averageFrames(this->frames, this->correctedMicrograph);
 
 	saveMicrograph(this->fnMicrograph, this->correctedMicrograph);
@@ -299,24 +293,14 @@ void ProgMovieAlignmentDeformationModel::partitionFrames(const std::vector<Multi
 void ProgMovieAlignmentDeformationModel::estimateShifts(const std::vector<MultidimArray<double>>& data,
 		std::vector<double>& shiftsX, std::vector<double>& shiftsY, int maxIterations, double minImprovement)
 {
-	// std::vector<double> yPos = {20, 58, 120};
- //    std::vector<double> xPos = {100, 90, 300};
 	
 	// prepare sum of images
     MultidimArray<double> sum;
     sum.initZeros(data[0]);
     sum.setXmippOrigin();
-    // std::cout << "size: " << data.size() << std::endl;
-    // std::cout << "x:" << sum.xdim << std::endl;
-    // std::cout << "y:" << sum.ydim << std::endl;
     for (const MultidimArray<double>& ma : data) {
-        // std::cout << "x:";
-        // std::cout << ma.xdim;
-        // std::cout << "y:";
-        // std::cout << ma.ydim << std::endl;
         sum = sum + ma;
     }    
-    // std::cout << "----end---" << std::endl;
     // estimate the shifts
     double shiftX;
     double shiftY;
@@ -324,20 +308,12 @@ void ProgMovieAlignmentDeformationModel::estimateShifts(const std::vector<Multid
     int cycle = 0;
     double maxDiff = std::numeric_limits<double>::max();
     MultidimArray<double> helper;
-    // Image<double> img(256,512,1,1);
     while (cycle < maxIterations) {
         maxDiff = 0;
         cycle++;
-     //    for (int i = 0; i < data.size(); i++) {
-	    //     std::cout << i << ": " << "x is " << (xPos[i] + shiftsX[i]) <<
-	    //     	", y is " << (yPos[i] + shiftsY[i]) << std::endl;
-    	// }
         for (int i = 0; i < data.size(); i++) {
             sum -= data[i];
             sum = sum / (data.size() - 1);
-            // FileName fn("/home/fonadius/Downloads/a" + std::to_string(cycle) + "-" +  std::to_string(i) + ".jpg");
-            // img() = sum;
-            // img.write(fn);
             bestShift(sum, data[i], shiftX, shiftY, aux);
             sum = sum * (data.size() - 1);
             sum += data[i];
@@ -357,8 +333,6 @@ void ProgMovieAlignmentDeformationModel::estimateShifts(const std::vector<Multid
             translate(2, helper, data[i], vectorR2(shiftsX[i], shiftsY[i]), false, 0.0);
             sum += helper;
         }
-
-        // std::cout << cycle << " : " << maxDiff << std::endl;
     }
 }
 
@@ -373,7 +347,6 @@ void ProgMovieAlignmentDeformationModel::estimateLocalShifts(
     std::vector<double> tmpXShifts(partDepth);
     std::vector<double> tmpYShifts(partDepth);
     for (int i = 0; i < partitions.size(); i++) {
-    	// std::cout << partitions[i].size() << std::endl;
         estimateShifts(partitions[i], tmpXShifts, tmpYShifts, this->maxIterations);
         for (int j = 0; j < partDepth; j++) {
         	shiftsX[i + j*partsPerFrame] = tmpXShifts[j];
@@ -388,7 +361,7 @@ void ProgMovieAlignmentDeformationModel::calculateModelCoefficients(const std::v
 	alglib::real_1d_array c;
 	c.setlength(coeffs.size());
 	for (size_t i = 0; i < c.length(); i++) {
-		c[i] = 1;
+		c[i] = 0.05;
 	}
 
 	alglib::real_1d_array y;
@@ -428,10 +401,11 @@ void ProgMovieAlignmentDeformationModel::calculateModelCoefficients(const std::v
     alglib::ae_int_t info;
     alglib::lsfitstate state;
     alglib::lsfitreport rep;
-    double epsx = 1e-12;
-    double epsf = 1e-12;
+    double epsf = 0.000001;
+    double epsx = 0.000001;
     alglib::ae_int_t maxits = 0;
-    double diffstep = 0e-10;
+    double diffstep = 0.000001;
+
 
     alglib::lsfitcreatef(positions, y, c, diffstep, state);
     alglib::lsfitsetcond(state, epsf, epsx, maxits);
@@ -480,37 +454,29 @@ void ProgMovieAlignmentDeformationModel::downsampleFrame(MultidimArray<double>& 
     MultidimArray<std::complex<double> > resultReciprocal;
     trResult.getFourierAlias(resultReciprocal);
 
-    // int ihalf=resultReciprocal.ydim / 2 + 1;
-    // for (int i=0; i<resultReciprocal.ydim; i++)
-    //     for (size_t j=0; j<resultReciprocal.xdim; j++)
-    //         A2D_ELEM(resultReciprocal,i,j)=A2D_ELEM(inputReciprocal,i,j);
-    // for (size_t i=ihalf; i<resultReciprocal.ydim; i++)
-    // {
-    //     size_t ip=inputReciprocal.ydim-resultReciprocal.ydim+i;
-    //     for (size_t j=0; j<resultReciprocal.xdim; j++)
-    //         A2D_ELEM(resultReciprocal,i,j)=A2D_ELEM(inputReciprocal,ip,j);
-    // }
     for (int i = 0; i < resultReciprocal.ydim; i++) {
         for (int j = 0; j < resultReciprocal.xdim; j++) {
             dAij(resultReciprocal, i, j) = dAij(inputReciprocal, i*scalingFactor, j*scalingFactor);
         }
     }
     trResult.inverseFourierTransform();
-
-    std::cout << omin << "," << omax << std::endl;
-    // out.rangeAdjust(omin, omax);
+    out.rangeAdjust(omin, omax);
 }
 
 void ProgMovieAlignmentDeformationModel::applyDeformation(const MultidimArray<double>& input,
 		MultidimArray<double>& output, const std::vector<double>& cx, const std::vector<double>& cy,
 		double t1, double t2)
 {
+    int scalingFactor = upScaling;
     int maxX = input.xdim;
     int maxY = input.ydim;
-    FOR_ALL_DIRECT_ELEMENTS_IN_ARRAY2D(input)
+    FOR_ALL_DIRECT_ELEMENTS_IN_ARRAY2D(output)
     {
         int y = i;
         int x = j;
+
+        int realY = floor(y / scalingFactor);
+        int realX = floor(x / scalingFactor);
 
         double posy = y + calculateShift(y, x, t2, cy) - calculateShift(y, x, t1, cy);
         double posx = x + calculateShift(y, x, t2, cx) - calculateShift(y, x, t1, cx);
@@ -519,6 +485,11 @@ void ProgMovieAlignmentDeformationModel::applyDeformation(const MultidimArray<do
         int x_right = x_left + 1;
         int y_down = floor(posy);
         int y_up = y_down + 1;
+
+        x_left /= scalingFactor;
+        x_right /= scalingFactor;
+        y_down /= scalingFactor;
+        y_up /= scalingFactor;
 
         double val;
         if (x_right <= 0 || y_up <= 0 || x_left >= maxX -1 || y_down >= maxY - 1) {
