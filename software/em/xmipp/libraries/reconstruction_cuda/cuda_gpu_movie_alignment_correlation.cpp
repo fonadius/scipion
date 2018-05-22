@@ -77,26 +77,37 @@ void kernel2(const float2* __restrict__ src, float2* dest, int noOfImages, size_
 //	}
 }
 
-int getBestSize(int noOfImgs, int newXdim) {
-	int device = 0; // FIXME
+size_t getFreeMem(int device) {
+	return cuFFTAdvisor::toMB(cuFFTAdvisor::getFreeMemory(device));
+}
 
-	size_t freeMem = cuFFTAdvisor::toMB(cuFFTAdvisor::getFreeMemory(device));
+void getBestSize(int imgsToProcess, int origXSize, int origYSize, int &batchSize, int &xSize, int &ySize) {
+	int device = 0; // FIXME detect device or add to cmd param
+
+	size_t freeMem = getFreeMem(device);
 	std::vector<cuFFTAdvisor::BenchmarkResult const *> *results =
 			cuFFTAdvisor::Advisor::find(50, device,
-					newXdim, 1, 1, noOfImgs,
+					origXSize, origYSize, 1, imgsToProcess,
 					cuFFTAdvisor::Tristate::TRUE,
 					cuFFTAdvisor:: Tristate::TRUE,
 					cuFFTAdvisor::Tristate::TRUE,
-					cuFFTAdvisor::Tristate::TRUE,
+					cuFFTAdvisor::Tristate::FALSE,
 					cuFFTAdvisor::Tristate::TRUE, INT_MAX,
 						  freeMem);
 
-
-
-
-	return results->at(0)->transform->X;
+	batchSize = results->at(0)->transform->N;
+	xSize = results->at(0)->transform->X;
+	ySize = results->at(0)->transform->Y;
 }
 
+
+float* loadToGPU(float* data, size_t items) {
+	float* d_data;
+	size_t bytes = items * sizeof(float);
+	gpuMalloc((void**) &d_data,bytes);
+	gpuErrchk(cudaMemcpy(d_data, data, bytes, cudaMemcpyHostToDevice));
+	return d_data;
+}
 
 void kernel1(float* imgs, size_t oldX, size_t oldY, int noOfImages, size_t newX, size_t newY,
 		float* filter,
@@ -155,10 +166,7 @@ void kernel1(float* imgs, size_t oldX, size_t oldY, int noOfImages, size_t newX,
 	size_t newFFTX = newX / 2 + 1;
 	size_t noOfCroppedFloats = noOfImages * newFFTX * newY ; // complex
 
-	// copy filter
-	float* d_filter;
-	gpuMalloc((void**) &d_filter,newFFTX * newY*sizeof(float));
-	gpuErrchk(cudaMemcpy(d_filter, filter, newFFTX * newY*sizeof(float), cudaMemcpyHostToDevice));
+	float* d_filter; // FIXME
 
 	gpuMalloc((void**) &d_cropped,noOfCroppedFloats*sizeof(float2));
 	cudaMemset(d_cropped, 0.f, noOfCroppedFloats*sizeof(float2));

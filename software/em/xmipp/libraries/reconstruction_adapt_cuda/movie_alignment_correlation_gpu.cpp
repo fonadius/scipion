@@ -101,6 +101,10 @@ void ProgMovieAlignmentCorrelationGPU::loadFrame(const MetaData& movie, size_t o
 	}
 }
 
+int getMaxBatch() {
+	return 1; // FIXME implement
+}
+
 
 void ProgMovieAlignmentCorrelationGPU::loadData(const MetaData& movie,
 		const Image<double>& dark, const Image<double>& gain,
@@ -109,67 +113,63 @@ void ProgMovieAlignmentCorrelationGPU::loadData(const MetaData& movie,
 	Image<float> frame, gainF, darkF;
 	MultidimArray<float> filter;
 	bool cropInput = (yDRcorner != -1);
+	int noOfImgs = nlast - nfirst + 1;
+	int noOfCorrelations = std::ceil((noOfImgs * (noOfImgs - 1.f)) / 2.f);
 
 	// copy image correction data, convert to float
 	gainF.data.resize(gain(), true);
 	darkF.data.resize(dark(), true);
 
-
-	int paddedSize = getBestSize(noOfImgs, newXdim);//results->at(0)->transform->X;
-	int padding = paddedSize - newXdim;
-	printf("using padding %d (%d-%d)\n", padding, paddedSize, newXdim);
-
-	newXdim = newYdim = paddedSize; // FIXME
-
-	// FIXME extract
-	filter.initZeros(paddedSizeY, paddedSizeX/2+1);
-
+	// get frame info
 	loadFrame(movie, movie.firstObject(), cropInput, frame);
-	int paddedLineLength = (frame.data.xdim/2+1)*2;
-	size_t noOfFloats = noOfImgs * std::max(frame.data.yxdim, paddedLineLength * frame.data.ydim * 2);
-	float* imgs = new float[noOfFloats]();
-	std::cout << "noOfFloats: " << noOfFloats << std::endl;
-	int counter = -1;
-	scaleLPF(lpf, paddedSizeX, paddedSizeY, targetOccupancy, filter);
-	FOR_ALL_OBJECTS_IN_METADATA(movie) {
-		counter++;
-		if (counter < nfirst ) continue;
-		if (counter > nlast) break;
 
+	// get best sizes
+	if (verbose) std::cerr << "Benchmarking cuFFT ..." << std::endl;
+	getBestSize(noOfImgs, frame.data.xdim, frame.data.ydim, inputOptBatchSize, inputOptSizeX, inputOptSizeY);
+	inputOptSizeFFTX = inputOptSizeX / 2 + 1;
+	printf("best FFT for input is %d images of %d x %d (%d)\n", inputOptBatchSize, inputOptSizeX, inputOptSizeY, inputOptSizeFFTX);
+	getBestSize(getMaxBatch(), newXdim, newYdim, croppedOptBatchSize, croppedOptSizeX, croppedOptSizeY);
+	croppedOptSizeFFTX = croppedOptSizeX / 2 + 1;
+	printf("best FFT for cropped imgs is %d images of %d x %d (%d)\n", croppedOptBatchSize, croppedOptSizeX, croppedOptSizeY, croppedOptSizeFFTX);
+
+	// prepare filter
+	filter.initZeros(croppedOptSizeY, croppedOptSizeFFTX);
+	scaleLPF(lpf, croppedOptSizeX, croppedOptSizeY, targetOccupancy, filter);
+	float* d_filter = loadToGPU(filter.data, croppedOptSizeFFTX * croppedOptSizeY);
+
+	// load all frames to RAM
+	size_t noOfFloats = noOfImgs * inputOptSizeX * inputOptSizeY;
+	float* imgs = new float[noOfFloats](); // FIXME this can be unified with tmpResult
+	int movieImgIndex = -1;
+	FOR_ALL_OBJECTS_IN_METADATA(movie) {
+		// update variables
+		movieImgIndex++;
+		if (movieImgIndex < nfirst ) continue;
+		if (movieImgIndex > nlast) break;
+
+		// load image
 		loadFrame(movie, __iter.objId, cropInput, frame);
-		// FIXME optimize if necessary
 		if (XSIZE(darkF()) > 0)
 			frame() -= darkF();
 		if (XSIZE(gainF()) > 0)
 			frame() *= gainF();
 
-
-//		************
-//		IN-PLACE
-//		************
+		// add image at the end of the stack (that is already long enough)
 		// copy line by line, adding offset at the end of each line
-		// result is the same image, padded in the X dimension to (N/2+1)*2
-		float* dest = imgs + ((counter-nfirst) * paddedLineLength * frame.data.ydim); // points to first float in the image
-		for (int i = 0; i < frame.data.ydim; i++) {
-			memcpy(dest + (paddedLineLength * i),
+		// result is the same image, padded in the X and Y dimensions
+		float* dest = imgs + ((movieImgIndex-nfirst) * inputOptSizeX * inputOptSizeY); // points to first float in the image
+		for (size_t i = 0; i < frame.data.ydim; ++i) {
+			memcpy(dest + (inputOptSizeX * i),
 					frame.data.data + i*frame.data.xdim,
 					frame.data.xdim * sizeof(float));
 		}
-
-//		************
-//		OUT-OF-PLACE
-//		************
-//		// add image at the end of the stack (that is already long enough)
-//		memcpy(imgs + ((counter-nfirst) * ((frame.data.xdim/2+1) * frame.data.ydim * 2)),
-//				frame.data.data,
-//				frame.data.yxdim * sizeof(float));
 	}
 
-//	Image<float> aaaa(paddedLineLength, frame.data.ydim, 1, noOfImgs);
-//	aaaa.data.data = imgs;
-//	aaaa.write("images.vol");
+	Image<float> aaaa(inputOptSizeX, inputOptSizeY, 1, noOfImgs);
+	aaaa.data.data = imgs;
+	aaaa.write("images.vol");
 
-
+	return;
 
 
 //	float* result;
