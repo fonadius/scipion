@@ -135,11 +135,11 @@ void ProgMovieAlignmentCorrelationGPU::loadData(const MetaData& movie,
 	// prepare filter
 	filter.initZeros(croppedOptSizeY, croppedOptSizeFFTX);
 	scaleLPF(lpf, croppedOptSizeX, croppedOptSizeY, targetOccupancy, filter);
-	float* d_filter = loadToGPU(filter.data, croppedOptSizeFFTX * croppedOptSizeY);
+	float* d_filter = loadToGPU(filter.data, croppedOptSizeFFTX * croppedOptSizeY); // FIXME this will consume some memory on GPU. Previous best batch size estimation might be invalid
 
 	// load all frames to RAM
-	size_t noOfFloats = noOfImgs * inputOptSizeX * inputOptSizeY;
-	float* imgs = new float[noOfFloats](); // FIXME this can be unified with tmpResult
+	float* imgs = new float[noOfImgs * inputOptSizeX * inputOptSizeY](); // FIXME this can be unified with imgs
+	std::complex<float>* scaledFFTs = new std::complex<float>[noOfImgs * croppedOptSizeFFTX * croppedOptSizeY]();
 	int movieImgIndex = -1;
 	FOR_ALL_OBJECTS_IN_METADATA(movie) {
 		// update variables
@@ -165,16 +165,40 @@ void ProgMovieAlignmentCorrelationGPU::loadData(const MetaData& movie,
 		}
 	}
 
-	Image<float> aaaa(inputOptSizeX, inputOptSizeY, 1, noOfImgs);
-	aaaa.data.data = imgs;
-	aaaa.write("images.vol");
+	//	Image<float> aaaa(inputOptSizeX, inputOptSizeY, 1, noOfImgs);
+	//	aaaa.data.data = imgs;
+	//	aaaa.write("images.vol");
 
-	return;
+	float* imgsToProcess = imgs;
+	float* imgsEnd = imgs + noOfImgs * inputOptSizeX * inputOptSizeY;
+	std::complex<float>* result = scaledFFTs;
+	while (imgsToProcess != imgsEnd) {
+		processInput(imgsToProcess, inputOptSizeX, inputOptSizeY, inputOptBatchSize, croppedOptSizeX, croppedOptSizeY, d_filter, result);
+		result += croppedOptSizeFFTX * croppedOptSizeY * inputOptBatchSize;
+		imgsToProcess = std::min(imgsEnd, imgsToProcess + inputOptSizeX * inputOptSizeY * inputOptBatchSize);
+	}
+	delete[] imgs;
+	release(d_filter);
+//
+	printf("hotovo\n");
+	fflush(stdout);
+//	Image<double> bbb(croppedOptSizeFFTX, croppedOptSizeY, 1, noOfImgs);
+//	for (size_t i = 0; i < ((size_t)croppedOptSizeFFTX * croppedOptSizeY * noOfImgs); i++) {
+//		double d = scaledFFTs[i].real() / (frame.data.xdim*frame.data.ydim);
+//		if (d < 3) bbb.data[i] = d;
+//	}
+//	bbb.write("fftFromGPU_nove.vol");
+//	printf("juchuuu\n");
+//	fflush(stdout);
+
+
+//
+//	return;
 
 
 //	float* result;
-	size_t newFFTXDim = newXdim/2+1;
-	kernel1(imgs, frame.data.xdim, frame.data.ydim, noOfImgs, newXdim, newYdim, filter.data, tmpResult);
+//	size_t newFFTXDim = newXdim/2+1;
+//	kernel1(imgs, frame.data.xdim, frame.data.ydim, noOfImgs, newXdim, newYdim, filter.data, tmpResult);
 // 	******************
 //	FIXME normalization has to be done using original img size, i.e frame.data.xdim*frame.data.ydim
 //	******************

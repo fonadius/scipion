@@ -4,6 +4,8 @@
 
 float* loadToGPU(float* data, size_t items);
 
+void release(float* data);
+
 void getBestSize(int imgsToProcess, int origXSize, int origYSize, int &batchSize, int &xSize, int &ySize);
 size_t getFreeMem(int device);
 
@@ -15,4 +17,10 @@ void kernel1(float* imgs, size_t oldX, size_t oldY, int noOfImages, size_t newX,
 void kernel3(float maxShift, size_t noOfImgs,
 		const std::complex<float>* imgs, size_t fftXdim, size_t fftYdim,
 		float*& result, std::complex<float>*& result2);
+
+void processInput(float* imgsToProcess,
+		int inSizeX, int inSizeY, int inBatch,
+		int outSizeX, int outSizeY, float* d_filter,
+		std::complex<float>* result);
+
 

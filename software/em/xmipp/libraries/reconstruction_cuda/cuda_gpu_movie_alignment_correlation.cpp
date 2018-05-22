@@ -100,13 +100,68 @@ void getBestSize(int imgsToProcess, int origXSize, int origYSize, int &batchSize
 	ySize = results->at(0)->transform->Y;
 }
 
-
 float* loadToGPU(float* data, size_t items) {
 	float* d_data;
 	size_t bytes = items * sizeof(float);
 	gpuMalloc((void**) &d_data,bytes);
 	gpuErrchk(cudaMemcpy(d_data, data, bytes, cudaMemcpyHostToDevice));
 	return d_data;
+}
+
+void release(float* data) {
+	gpuErrchk(cudaFree(data));
+}
+
+void processInput(float* imgsToProcess,
+		int inSizeX, int inSizeY, int inBatch,
+		int outSizeX, int outSizeY, float* d_filter, std::complex<float>* result) {
+
+	// copy imgs to GPU and store to proper structure
+	float* d_imgs = loadToGPU(imgsToProcess, inBatch * inSizeX * inSizeY);
+	GpuMultidimArrayAtGpu<float> imagesGPU(inSizeX, inSizeY, 1, inBatch, d_imgs);
+
+	GpuMultidimArrayAtGpu<std::complex<float> > resultingFFT;
+	std::cout << "about to do FFT" << std::endl;
+	mycufftHandle handleInput;
+	imagesGPU.fft(resultingFFT, handleInput);
+	handleInput.clear();
+
+
+	// crop FFT
+	size_t outFFTX = outSizeX / 2 + 1;
+	size_t noOfCroppedFloats = inBatch * outFFTX * outSizeY ; // complex
+	float2* d_cropped;
+	gpuMalloc((void**) &d_cropped,noOfCroppedFloats*sizeof(float2));
+	cudaMemset(d_cropped, 0.f, noOfCroppedFloats*sizeof(float2));
+
+
+	dim3 dimBlock(BLOCK_DIM_X, BLOCK_DIM_X);
+	dim3 dimGrid(ceil(outFFTX/(float)dimBlock.x), ceil(outSizeY/(float)dimBlock.y));
+	printf("about to run kernel\n");
+	kernel2<<<dimGrid, dimBlock>>>((float2*)resultingFFT.d_data, d_cropped, inBatch, resultingFFT.Xdim, resultingFFT.Ydim, outFFTX, outSizeY, d_filter);
+	gpuErrchk( cudaPeekAtLastError() );
+	gpuErrchk( cudaDeviceSynchronize() );
+	gpuErrchk( cudaPeekAtLastError() );
+
+// copy out results
+	std::cout << "about to copy to host" << std::endl;
+//	result = new std::complex<float>[noOfImages*newFFTX*newY]();
+//	printf("result: %p\nFFTs: %p\n", result, resultingFFT.d_data );
+//	resultingFFT.copyToCpu(result);
+//	printf ("about to copy to host: %p %p %d\n", result, d_cropped, noOfCroppedFloats*sizeof(float));
+	gpuErrchk(cudaMemcpy((void*)result, (void*)d_cropped, noOfCroppedFloats*sizeof(float2), cudaMemcpyDeviceToHost));
+	cudaFree(d_cropped);
+	gpuErrchk( cudaPeekAtLastError() );
+		gpuErrchk( cudaDeviceSynchronize() );
+//	std::cout << "copy to host done" << std::endl;
+//	result = (std::complex<float>*) d_cropped;
+//	resultingFFT.d_data = NULL;
+//	std::cout << "No of elems: " << resultingFFT.nzyxdim  << " X:" << resultingFFT.Xdim << " Y:" << resultingFFT.Ydim<< std::endl;
+
+//	cudaMemGetInfo(&free, &total);
+//	printf("Mem kernel1 end: %lu %lu\n", free/1024/1024, total);
+//	printf("---------------- kernel1 end\n");
+//	fflush(stdout);
 }
 
 void kernel1(float* imgs, size_t oldX, size_t oldY, int noOfImages, size_t newX, size_t newY,
