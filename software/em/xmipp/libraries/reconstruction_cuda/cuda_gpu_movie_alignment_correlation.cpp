@@ -84,18 +84,18 @@ std::complex<float>* performFFTAndScale(float* inOutData, int noOfImgs,
 	mycufftHandle handle;
 	int counter = 0;
 	std::complex<float>* h_result = (std::complex<float>*)inOutData;
-	float* d_imgs;
-	gpuErrchk(cudaMalloc((void**) &d_imgs, inBatch * inSizeX * inSizeY * sizeof(float)));
+	GpuMultidimArrayAtGpu<float> imagesGPU(inSizeX, inSizeY, 1, inBatch);
 
 	while (counter < noOfImgs) {
 		int imgToProcess = std::min(inBatch, noOfImgs - counter);
 		float* h_imgLoad = inOutData + counter * inSizeX * inSizeY;
+		size_t bytes = imgToProcess * inSizeX * inSizeY * sizeof(float);
+		gpuErrchk(cudaMemcpy(imagesGPU.d_data, h_imgLoad, bytes, cudaMemcpyHostToDevice));
 		std::complex<float>* h_imgStore = h_result + counter * outSizeX * outSizeY;
-		processInput(h_imgLoad, d_imgs, handle, inSizeX, inSizeY, imgToProcess, outSizeX, outSizeY, d_filter, h_imgStore);
+		processInput(imagesGPU, handle, inSizeX, inSizeY, imgToProcess, outSizeX, outSizeY, d_filter, h_imgStore);
 		counter += inBatch;
 	}
 	handle.clear();
-	gpuErrchk(cudaFree(d_imgs));
 
 	return h_result;
 }
@@ -137,30 +137,23 @@ void release(float* data) {
 	gpuErrchk(cudaFree(data));
 }
 
-void processInput(float* imgsToProcess,
-		float* d_imgs,
+void processInput(GpuMultidimArrayAtGpu<float>& imagesGPU,
 		mycufftHandle handle,
 		int inSizeX, int inSizeY, int inBatch,
 		int outSizeX, int outSizeY, float* d_filter, std::complex<float>* result) {
 
-	// copy imgs to GPU and store to proper structure
-	size_t bytes =  inBatch * inSizeX * inSizeY * sizeof(float);
-	gpuErrchk(cudaMemcpy(d_imgs, imgsToProcess, bytes, cudaMemcpyHostToDevice));
-	GpuMultidimArrayAtGpu<float> imagesGPU(inSizeX, inSizeY, 1, inBatch, d_imgs);
-
 	GpuMultidimArrayAtGpu<std::complex<float> > resultingFFT;
 	std::cout << "about to do FFT" << std::endl;
 	imagesGPU.fft(resultingFFT, handle);
-	imagesGPU.d_data = NULL; // otherwise they will be dealocated by destructor
 
 	// crop FFT, reuse already allocated space
 	size_t noOfCroppedFloats = inBatch * outSizeX * outSizeY ; // complex
-	cudaMemset(d_imgs, 0.f, noOfCroppedFloats*sizeof(float2));
+	cudaMemset(imagesGPU.d_data, 0.f, noOfCroppedFloats*sizeof(float2));
 
 	dim3 dimBlock(BLOCK_DIM_X, BLOCK_DIM_X);
 	dim3 dimGrid(ceil(outSizeX/(float)dimBlock.x), ceil(outSizeY/(float)dimBlock.y));
 	printf("about to run kernel\n");
-	kernel2<<<dimGrid, dimBlock>>>((float2*)resultingFFT.d_data, (float2*)d_imgs, inBatch, resultingFFT.Xdim, resultingFFT.Ydim, outSizeX, outSizeY, d_filter);
+	kernel2<<<dimGrid, dimBlock>>>((float2*)resultingFFT.d_data, (float2*)imagesGPU.d_data, inBatch, resultingFFT.Xdim, resultingFFT.Ydim, outSizeX, outSizeY, d_filter);
 	gpuErrchk( cudaPeekAtLastError() );
 	gpuErrchk( cudaDeviceSynchronize() );
 	gpuErrchk( cudaPeekAtLastError() );
@@ -171,7 +164,7 @@ void processInput(float* imgsToProcess,
 //	printf("result: %p\nFFTs: %p\n", result, resultingFFT.d_data );
 //	resultingFFT.copyToCpu(result);
 //	printf ("about to copy to host: %p %p %d\n", result, d_cropped, noOfCroppedFloats*sizeof(float));
-	gpuErrchk(cudaMemcpy((void*)result, (void*)d_imgs, noOfCroppedFloats*sizeof(float2), cudaMemcpyDeviceToHost));
+	gpuErrchk(cudaMemcpy((void*)result, (void*)imagesGPU.d_data, noOfCroppedFloats*sizeof(float2), cudaMemcpyDeviceToHost));
 	gpuErrchk( cudaPeekAtLastError() );
 	gpuErrchk( cudaDeviceSynchronize() );
 //	std::cout << "copy to host done" << std::endl;
