@@ -25,7 +25,8 @@ std::complex<float>* performFFTAndScale(float* h_imgs, int noOfImgs,
 		int outSizeX, int outSizeY,  float* d_filter);
 
 void processInput(GpuMultidimArrayAtGpu<float>& imagesGPU,
-		mycufftHandle handle,
+		GpuMultidimArrayAtGpu<std::complex<float> >& resultingFFT,
+		mycufftHandle& handle,
 		int inSizeX, int inSizeY, int inBatch,
 		int outSizeX, int outSizeY, float* d_filter,
 		std::complex<float>* result);

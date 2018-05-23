@@ -85,6 +85,7 @@ std::complex<float>* performFFTAndScale(float* inOutData, int noOfImgs,
 	int counter = 0;
 	std::complex<float>* h_result = (std::complex<float>*)inOutData;
 	GpuMultidimArrayAtGpu<float> imagesGPU(inSizeX, inSizeY, 1, inBatch);
+	GpuMultidimArrayAtGpu<std::complex<float> > resultingFFT;
 
 	while (counter < noOfImgs) {
 		int imgToProcess = std::min(inBatch, noOfImgs - counter);
@@ -92,7 +93,7 @@ std::complex<float>* performFFTAndScale(float* inOutData, int noOfImgs,
 		size_t bytes = imgToProcess * inSizeX * inSizeY * sizeof(float);
 		gpuErrchk(cudaMemcpy(imagesGPU.d_data, h_imgLoad, bytes, cudaMemcpyHostToDevice));
 		std::complex<float>* h_imgStore = h_result + counter * outSizeX * outSizeY;
-		processInput(imagesGPU, handle, inSizeX, inSizeY, imgToProcess, outSizeX, outSizeY, d_filter, h_imgStore);
+		processInput(imagesGPU, resultingFFT, handle, inSizeX, inSizeY, imgToProcess, outSizeX, outSizeY, d_filter, h_imgStore);
 		counter += inBatch;
 	}
 	handle.clear();
@@ -138,12 +139,13 @@ void release(float* data) {
 }
 
 void processInput(GpuMultidimArrayAtGpu<float>& imagesGPU,
-		mycufftHandle handle,
+		GpuMultidimArrayAtGpu<std::complex<float> >& resultingFFT,
+		mycufftHandle& handle,
 		int inSizeX, int inSizeY, int inBatch,
 		int outSizeX, int outSizeY, float* d_filter, std::complex<float>* result) {
 
-	GpuMultidimArrayAtGpu<std::complex<float> > resultingFFT;
-	std::cout << "about to do FFT" << std::endl;
+
+//	std::cout << "about to do FFT" << std::endl;
 	imagesGPU.fft(resultingFFT, handle);
 
 	// crop FFT, reuse already allocated space
@@ -152,14 +154,14 @@ void processInput(GpuMultidimArrayAtGpu<float>& imagesGPU,
 
 	dim3 dimBlock(BLOCK_DIM_X, BLOCK_DIM_X);
 	dim3 dimGrid(ceil(outSizeX/(float)dimBlock.x), ceil(outSizeY/(float)dimBlock.y));
-	printf("about to run kernel\n");
+//	printf("about to run kernel\n");
 	kernel2<<<dimGrid, dimBlock>>>((float2*)resultingFFT.d_data, (float2*)imagesGPU.d_data, inBatch, resultingFFT.Xdim, resultingFFT.Ydim, outSizeX, outSizeY, d_filter);
 	gpuErrchk( cudaPeekAtLastError() );
 	gpuErrchk( cudaDeviceSynchronize() );
 	gpuErrchk( cudaPeekAtLastError() );
 
 // copy out results
-	std::cout << "about to copy to host" << std::endl;
+//	std::cout << "about to copy to host" << std::endl;
 //	result = new std::complex<float>[noOfImages*newFFTX*newY]();
 //	printf("result: %p\nFFTs: %p\n", result, resultingFFT.d_data );
 //	resultingFFT.copyToCpu(result);
