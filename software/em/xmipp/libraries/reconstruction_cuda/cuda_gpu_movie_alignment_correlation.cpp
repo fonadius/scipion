@@ -77,6 +77,26 @@ void kernel2(const float2* __restrict__ src, float2* dest, int noOfImages, size_
 //	}
 }
 
+
+std::complex<float>* performFFTAndScale(float* h_imgs, int noOfImgs,
+		int inSizeX, int inSizeY, int inBatch,
+		int outSizeX, int outSizeY,  float* d_filter) {
+	mycufftHandle handleInput;
+
+//	float* imgsStart = h_imgs;
+//	float* imgsEnd = imgsStart + noOfImgs * inSizeX * inSizeY;
+	std::complex<float>* result = new std::complex<float>[noOfImgs * outSizeX * outSizeY];
+	int counter = 0;
+	while (counter < noOfImgs) {
+		int imgToProcess = std::min(inBatch, noOfImgs - counter);
+		float* imgLoad = h_imgs + counter * inSizeX * inSizeY;
+		std::complex<float>* imgStore = result + counter * outSizeX * outSizeY;
+		processInput(imgLoad, inSizeX, inSizeY, imgToProcess, outSizeX, outSizeY, d_filter, imgStore);
+		counter += inBatch;
+	}
+	return result;
+}
+
 size_t getFreeMem(int device) {
 	return cuFFTAdvisor::toMB(cuFFTAdvisor::getFreeMemory(device));
 }
@@ -129,17 +149,16 @@ void processInput(float* imgsToProcess,
 
 
 	// crop FFT
-	size_t outFFTX = outSizeX / 2 + 1;
-	size_t noOfCroppedFloats = inBatch * outFFTX * outSizeY ; // complex
+	size_t noOfCroppedFloats = inBatch * outSizeX * outSizeY ; // complex
 	float2* d_cropped;
 	gpuMalloc((void**) &d_cropped,noOfCroppedFloats*sizeof(float2));
 	cudaMemset(d_cropped, 0.f, noOfCroppedFloats*sizeof(float2));
 
 
 	dim3 dimBlock(BLOCK_DIM_X, BLOCK_DIM_X);
-	dim3 dimGrid(ceil(outFFTX/(float)dimBlock.x), ceil(outSizeY/(float)dimBlock.y));
+	dim3 dimGrid(ceil(outSizeX/(float)dimBlock.x), ceil(outSizeY/(float)dimBlock.y));
 	printf("about to run kernel\n");
-	kernel2<<<dimGrid, dimBlock>>>((float2*)resultingFFT.d_data, d_cropped, inBatch, resultingFFT.Xdim, resultingFFT.Ydim, outFFTX, outSizeY, d_filter);
+	kernel2<<<dimGrid, dimBlock>>>((float2*)resultingFFT.d_data, d_cropped, inBatch, resultingFFT.Xdim, resultingFFT.Ydim, outSizeX, outSizeY, d_filter);
 	gpuErrchk( cudaPeekAtLastError() );
 	gpuErrchk( cudaDeviceSynchronize() );
 	gpuErrchk( cudaPeekAtLastError() );

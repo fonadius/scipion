@@ -19,6 +19,10 @@ void kernel3(float maxShift, size_t noOfImgs,
 		const std::complex<float>* imgs, size_t fftXdim, size_t fftYdim,
 		float*& result, std::complex<float>*& result2);
 
+std::complex<float>* performFFTAndScale(float* h_imgs, int noOfImgs,
+		int inSizeX, int inSizeY, int inBatch,
+		int outSizeX, int outSizeY,  float* d_filter);
+
 void processInput(float* imgsToProcess,
 		int inSizeX, int inSizeY, int inBatch,
 		int outSizeX, int outSizeY, float* d_filter,

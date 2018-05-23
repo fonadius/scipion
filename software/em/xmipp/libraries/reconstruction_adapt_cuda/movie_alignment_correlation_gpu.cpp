@@ -146,6 +146,11 @@ float* ProgMovieAlignmentCorrelationGPU::loadToRAM(const MetaData& movie, int no
 					frame.data.xdim * sizeof(float));
 		}
 	}
+
+	//	Image<float> aaaa(inputOptSizeX, inputOptSizeY, 1, noOfImgs);
+	//	aaaa.data.data = imgs;
+	//	aaaa.write("images.vol");
+
 	return imgs;
 }
 
@@ -175,43 +180,38 @@ void ProgMovieAlignmentCorrelationGPU::loadData(const MetaData& movie,
 		const Image<double>& dark, const Image<double>& gain,
 		double targetOccupancy, const MultidimArray<double>& lpf) {
 	// allocate space for data on CPU
-	Image<float> frame;
-	MultidimArray<float> filter;
 	bool cropInput = (yDRcorner != -1);
 	int noOfImgs = nlast - nfirst + 1;
-	int noOfCorrelations = std::ceil((noOfImgs * (noOfImgs - 1.f)) / 2.f);
-
-
 
 	// get frame info
+	Image<float> frame;
 	loadFrame(movie, movie.firstObject(), cropInput, frame);
 	setSizes(frame, noOfImgs);
 	// prepare filter
+	MultidimArray<float> filter;
 	filter.initZeros(croppedOptSizeY, croppedOptSizeFFTX);
 	scaleLPF(lpf, croppedOptSizeX, croppedOptSizeY, targetOccupancy, filter);
 	float* d_filter = loadToGPU(filter.data, croppedOptSizeFFTX * croppedOptSizeY);
 
 	// load all frames to RAM
 	float* imgs = loadToRAM(movie, noOfImgs, dark, gain, cropInput);
-	std::complex<float>* scaledFFTs = new std::complex<float>[noOfImgs * croppedOptSizeFFTX * croppedOptSizeY](); // FIXME this can be unified with imgs
+	std::complex<float>* scaledFFTs; // FIXME this can be unified with imgs
+	scaledFFTs = performFFTAndScale(imgs, noOfImgs, inputOptSizeX, inputOptSizeY, inputOptBatchSize, croppedOptSizeFFTX, croppedOptSizeY, d_filter);
 
-	//	Image<float> aaaa(inputOptSizeX, inputOptSizeY, 1, noOfImgs);
-	//	aaaa.data.data = imgs;
-	//	aaaa.write("images.vol");
 
-	float* imgsToProcess = imgs;
-	float* imgsEnd = imgs + noOfImgs * inputOptSizeX * inputOptSizeY;
-	std::complex<float>* result = scaledFFTs;
-	while (imgsToProcess != imgsEnd) {
-		processInput(imgsToProcess, inputOptSizeX, inputOptSizeY, inputOptBatchSize, croppedOptSizeX, croppedOptSizeY, d_filter, result);
-		result += croppedOptSizeFFTX * croppedOptSizeY * inputOptBatchSize;
-		imgsToProcess = std::min(imgsEnd, imgsToProcess + inputOptSizeX * inputOptSizeY * inputOptBatchSize);
-	}
+//	float* imgsToProcess = imgs;
+//	float* imgsEnd = imgs + noOfImgs * inputOptSizeX * inputOptSizeY;
+//	std::complex<float>* result = scaledFFTs;
+//	while (imgsToProcess != imgsEnd) {
+//		processInput(imgsToProcess, inputOptSizeX, inputOptSizeY, inputOptBatchSize, croppedOptSizeX, croppedOptSizeY, d_filter, result);
+//		result += croppedOptSizeFFTX * croppedOptSizeY * inputOptBatchSize;
+//		imgsToProcess = std::min(imgsEnd, imgsToProcess + inputOptSizeX * inputOptSizeY * inputOptBatchSize);
+//	}
 	delete[] imgs;
 	release(d_filter);
 //
-	printf("hotovo\n");
-	fflush(stdout);
+//	printf("hotovo\n");
+//	fflush(stdout);
 //	Image<double> bbb(croppedOptSizeFFTX, croppedOptSizeY, 1, noOfImgs);
 //	for (size_t i = 0; i < ((size_t)croppedOptSizeFFTX * croppedOptSizeY * noOfImgs); i++) {
 //		double d = scaledFFTs[i].real() / (frame.data.xdim*frame.data.ydim);
