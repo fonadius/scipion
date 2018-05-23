@@ -144,18 +144,14 @@ void processInput(float* imgsToProcess,
 	imagesGPU.fft(resultingFFT, handleInput);
 	handleInput.clear();
 
-
-	// crop FFT
+	// crop FFT, reuse already allocated space
 	size_t noOfCroppedFloats = inBatch * outSizeX * outSizeY ; // complex
-	float2* d_cropped;
-	gpuMalloc((void**) &d_cropped,noOfCroppedFloats*sizeof(float2));
-	cudaMemset(d_cropped, 0.f, noOfCroppedFloats*sizeof(float2));
-
+	cudaMemset(d_imgs, 0.f, noOfCroppedFloats*sizeof(float2));
 
 	dim3 dimBlock(BLOCK_DIM_X, BLOCK_DIM_X);
 	dim3 dimGrid(ceil(outSizeX/(float)dimBlock.x), ceil(outSizeY/(float)dimBlock.y));
 	printf("about to run kernel\n");
-	kernel2<<<dimGrid, dimBlock>>>((float2*)resultingFFT.d_data, d_cropped, inBatch, resultingFFT.Xdim, resultingFFT.Ydim, outSizeX, outSizeY, d_filter);
+	kernel2<<<dimGrid, dimBlock>>>((float2*)resultingFFT.d_data, (float2*)d_imgs, inBatch, resultingFFT.Xdim, resultingFFT.Ydim, outSizeX, outSizeY, d_filter);
 	gpuErrchk( cudaPeekAtLastError() );
 	gpuErrchk( cudaDeviceSynchronize() );
 	gpuErrchk( cudaPeekAtLastError() );
@@ -166,10 +162,9 @@ void processInput(float* imgsToProcess,
 //	printf("result: %p\nFFTs: %p\n", result, resultingFFT.d_data );
 //	resultingFFT.copyToCpu(result);
 //	printf ("about to copy to host: %p %p %d\n", result, d_cropped, noOfCroppedFloats*sizeof(float));
-	gpuErrchk(cudaMemcpy((void*)result, (void*)d_cropped, noOfCroppedFloats*sizeof(float2), cudaMemcpyDeviceToHost));
-	cudaFree(d_cropped);
+	gpuErrchk(cudaMemcpy((void*)result, (void*)d_imgs, noOfCroppedFloats*sizeof(float2), cudaMemcpyDeviceToHost));
 	gpuErrchk( cudaPeekAtLastError() );
-		gpuErrchk( cudaDeviceSynchronize() );
+	gpuErrchk( cudaDeviceSynchronize() );
 //	std::cout << "copy to host done" << std::endl;
 //	result = (std::complex<float>*) d_cropped;
 //	resultingFFT.d_data = NULL;
