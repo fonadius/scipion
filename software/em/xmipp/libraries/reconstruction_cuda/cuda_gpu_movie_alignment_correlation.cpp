@@ -84,13 +84,17 @@ std::complex<float>* performFFTAndScale(float* inOutData, int noOfImgs,
 	mycufftHandle handle;
 	int counter = 0;
 	std::complex<float>* h_result = (std::complex<float>*)inOutData;
+
+
 	while (counter < noOfImgs) {
 		int imgToProcess = std::min(inBatch, noOfImgs - counter);
 		float* h_imgLoad = inOutData + counter * inSizeX * inSizeY;
 		std::complex<float>* h_imgStore = h_result + counter * outSizeX * outSizeY;
-		processInput(h_imgLoad, inSizeX, inSizeY, imgToProcess, outSizeX, outSizeY, d_filter, h_imgStore);
+		processInput(h_imgLoad, handle, inSizeX, inSizeY, imgToProcess, outSizeX, outSizeY, d_filter, h_imgStore);
 		counter += inBatch;
 	}
+	handle.clear();
+
 	return h_result;
 }
 
@@ -131,6 +135,7 @@ void release(float* data) {
 }
 
 void processInput(float* imgsToProcess,
+		mycufftHandle handle,
 		int inSizeX, int inSizeY, int inBatch,
 		int outSizeX, int outSizeY, float* d_filter, std::complex<float>* result) {
 
@@ -140,9 +145,7 @@ void processInput(float* imgsToProcess,
 
 	GpuMultidimArrayAtGpu<std::complex<float> > resultingFFT;
 	std::cout << "about to do FFT" << std::endl;
-	mycufftHandle handleInput;
-	imagesGPU.fft(resultingFFT, handleInput);
-	handleInput.clear();
+	imagesGPU.fft(resultingFFT, handle);
 
 	// crop FFT, reuse already allocated space
 	size_t noOfCroppedFloats = inBatch * outSizeX * outSizeY ; // complex

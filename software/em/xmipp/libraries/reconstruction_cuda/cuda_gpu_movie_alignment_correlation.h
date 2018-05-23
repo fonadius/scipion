@@ -1,6 +1,7 @@
 
 #include "utils.h"
 #include <vector>
+#include "reconstruction_cuda/cuda_xmipp_utils.h"
 
 float* loadToGPU(float* data, size_t items);
 
@@ -24,6 +25,7 @@ std::complex<float>* performFFTAndScale(float* h_imgs, int noOfImgs,
 		int outSizeX, int outSizeY,  float* d_filter);
 
 void processInput(float* imgsToProcess,
+		mycufftHandle handle,
 		int inSizeX, int inSizeY, int inBatch,
 		int outSizeX, int outSizeY, float* d_filter,
 		std::complex<float>* result);
