@@ -84,16 +84,18 @@ std::complex<float>* performFFTAndScale(float* inOutData, int noOfImgs,
 	mycufftHandle handle;
 	int counter = 0;
 	std::complex<float>* h_result = (std::complex<float>*)inOutData;
-
+	float* d_imgs;
+	gpuErrchk(cudaMalloc((void**) &d_imgs, inBatch * inSizeX * inSizeY * sizeof(float)));
 
 	while (counter < noOfImgs) {
 		int imgToProcess = std::min(inBatch, noOfImgs - counter);
 		float* h_imgLoad = inOutData + counter * inSizeX * inSizeY;
 		std::complex<float>* h_imgStore = h_result + counter * outSizeX * outSizeY;
-		processInput(h_imgLoad, handle, inSizeX, inSizeY, imgToProcess, outSizeX, outSizeY, d_filter, h_imgStore);
+		processInput(h_imgLoad, d_imgs, handle, inSizeX, inSizeY, imgToProcess, outSizeX, outSizeY, d_filter, h_imgStore);
 		counter += inBatch;
 	}
 	handle.clear();
+	gpuErrchk(cudaFree(d_imgs));
 
 	return h_result;
 }
@@ -105,7 +107,8 @@ size_t getFreeMem(int device) {
 void getBestSize(int imgsToProcess, int origXSize, int origYSize, int &batchSize, int &xSize, int &ySize, int extraMem) {
 	int device = 0; // FIXME detect device or add to cmd param
 
-	size_t freeMem = getFreeMem(device) - extraMem;
+	size_t freeMem = getFreeMem(device);
+	printf("free: %lu extra %d result %d\n", freeMem, extraMem, freeMem - extraMem);
 	std::vector<cuFFTAdvisor::BenchmarkResult const *> *results =
 			cuFFTAdvisor::Advisor::find(50, device,
 					origXSize, origYSize, 1, imgsToProcess,
@@ -114,7 +117,7 @@ void getBestSize(int imgsToProcess, int origXSize, int origYSize, int &batchSize
 					cuFFTAdvisor::Tristate::TRUE,
 					cuFFTAdvisor::Tristate::FALSE,
 					cuFFTAdvisor::Tristate::TRUE, INT_MAX,
-						  freeMem);
+						  freeMem - extraMem);
 
 	batchSize = results->at(0)->transform->N;
 	xSize = results->at(0)->transform->X;
@@ -135,17 +138,20 @@ void release(float* data) {
 }
 
 void processInput(float* imgsToProcess,
+		float* d_imgs,
 		mycufftHandle handle,
 		int inSizeX, int inSizeY, int inBatch,
 		int outSizeX, int outSizeY, float* d_filter, std::complex<float>* result) {
 
 	// copy imgs to GPU and store to proper structure
-	float* d_imgs = loadToGPU(imgsToProcess, inBatch * inSizeX * inSizeY);
+	size_t bytes =  inBatch * inSizeX * inSizeY * sizeof(float);
+	gpuErrchk(cudaMemcpy(d_imgs, imgsToProcess, bytes, cudaMemcpyHostToDevice));
 	GpuMultidimArrayAtGpu<float> imagesGPU(inSizeX, inSizeY, 1, inBatch, d_imgs);
 
 	GpuMultidimArrayAtGpu<std::complex<float> > resultingFFT;
 	std::cout << "about to do FFT" << std::endl;
 	imagesGPU.fft(resultingFFT, handle);
+	imagesGPU.d_data = NULL; // otherwise they will be dealocated by destructor
 
 	// crop FFT, reuse already allocated space
 	size_t noOfCroppedFloats = inBatch * outSizeX * outSizeY ; // complex
