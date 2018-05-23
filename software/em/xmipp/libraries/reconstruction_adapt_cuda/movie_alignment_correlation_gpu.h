@@ -47,8 +47,12 @@ private:
 	void computeShifts(size_t N, const Matrix1D<double>& bX,
 			const Matrix1D<double>& bY, const Matrix2D<double>& A);
 
+	float* loadToRAM(const MetaData& movie, int noOfImgs,
+			const Image<double>& dark, const Image<double>& gain, bool cropInput);
+
 private:
 	void loadFrame(const MetaData& movie, size_t objId, bool crop, Image<float>& out);
+	void setSizes(Image<float> frame, int noOfImgs);
 
 	int inputOptSizeX;
 	int inputOptSizeY;

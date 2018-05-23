@@ -115,43 +115,14 @@ int getMaxFilterSize(Image<float>& frame) { // FIXME put to header
 	return bytes / (1024*1024);
 }
 
-void ProgMovieAlignmentCorrelationGPU::loadData(const MetaData& movie,
-		const Image<double>& dark, const Image<double>& gain,
-		double targetOccupancy, const MultidimArray<double>& lpf) {
-	// allocate space for data on CPU
+float* ProgMovieAlignmentCorrelationGPU::loadToRAM(const MetaData& movie, int noOfImgs,
+		const Image<double>& dark, const Image<double>& gain, bool cropInput) {
+	float* imgs = new float[noOfImgs * inputOptSizeX * inputOptSizeY]();
 	Image<float> frame, gainF, darkF;
-	MultidimArray<float> filter;
-	bool cropInput = (yDRcorner != -1);
-	int noOfImgs = nlast - nfirst + 1;
-	int noOfCorrelations = std::ceil((noOfImgs * (noOfImgs - 1.f)) / 2.f);
-
 	// copy image correction data, convert to float
 	gainF.data.resize(gain(), true);
 	darkF.data.resize(dark(), true);
 
-	// get frame info
-	loadFrame(movie, movie.firstObject(), cropInput, frame);
-	int maxFilterSize = getMaxFilterSize(frame);
-
-	// get best sizes
-	if (verbose) std::cerr << "Benchmarking cuFFT ..." << std::endl;
-	// we also need enough memory for filter
-	getBestSize(noOfImgs, frame.data.xdim, frame.data.ydim, inputOptBatchSize, inputOptSizeX, inputOptSizeY, maxFilterSize);
-	inputOptSizeFFTX = inputOptSizeX / 2 + 1;
-	printf("best FFT for input is %d images of %d x %d (%d)\n", inputOptBatchSize, inputOptSizeX, inputOptSizeY, inputOptSizeFFTX);
-	// no extra memory needed
-	getBestSize(getMaxBatch(), newXdim, newYdim, croppedOptBatchSize, croppedOptSizeX, croppedOptSizeY);
-	croppedOptSizeFFTX = croppedOptSizeX / 2 + 1;
-	printf("best FFT for cropped imgs is %d images of %d x %d (%d)\n", croppedOptBatchSize, croppedOptSizeX, croppedOptSizeY, croppedOptSizeFFTX);
-
-	// prepare filter
-	filter.initZeros(croppedOptSizeY, croppedOptSizeFFTX);
-	scaleLPF(lpf, croppedOptSizeX, croppedOptSizeY, targetOccupancy, filter);
-	float* d_filter = loadToGPU(filter.data, croppedOptSizeFFTX * croppedOptSizeY);
-
-	// load all frames to RAM
-	float* imgs = new float[noOfImgs * inputOptSizeX * inputOptSizeY](); // FIXME this can be unified with imgs
-	std::complex<float>* scaledFFTs = new std::complex<float>[noOfImgs * croppedOptSizeFFTX * croppedOptSizeY]();
 	int movieImgIndex = -1;
 	FOR_ALL_OBJECTS_IN_METADATA(movie) {
 		// update variables
@@ -166,7 +137,6 @@ void ProgMovieAlignmentCorrelationGPU::loadData(const MetaData& movie,
 		if (XSIZE(gainF()) > 0)
 			frame() *= gainF();
 
-		// add image at the end of the stack (that is already long enough)
 		// copy line by line, adding offset at the end of each line
 		// result is the same image, padded in the X and Y dimensions
 		float* dest = imgs + ((movieImgIndex-nfirst) * inputOptSizeX * inputOptSizeY); // points to first float in the image
@@ -176,6 +146,54 @@ void ProgMovieAlignmentCorrelationGPU::loadData(const MetaData& movie,
 					frame.data.xdim * sizeof(float));
 		}
 	}
+	return imgs;
+}
+
+void ProgMovieAlignmentCorrelationGPU::setSizes(Image<float> frame,
+		int noOfImgs) {
+	// get best sizes
+	int maxFilterSize = getMaxFilterSize(frame);
+	if (verbose)
+		std::cerr << "Benchmarking cuFFT ..." << std::endl;
+
+	// we also need enough memory for filter
+	getBestSize(noOfImgs, frame.data.xdim, frame.data.ydim, inputOptBatchSize,
+			inputOptSizeX, inputOptSizeY, maxFilterSize);
+	inputOptSizeFFTX = inputOptSizeX / 2 + 1;
+	printf("best FFT for input is %d images of %d x %d (%d)\n",
+			inputOptBatchSize, inputOptSizeX, inputOptSizeY, inputOptSizeFFTX);
+	// no extra memory needed
+	getBestSize(getMaxBatch(), newXdim, newYdim, croppedOptBatchSize,
+			croppedOptSizeX, croppedOptSizeY);
+	croppedOptSizeFFTX = croppedOptSizeX / 2 + 1;
+	printf("best FFT for cropped imgs is %d images of %d x %d (%d)\n",
+			croppedOptBatchSize, croppedOptSizeX, croppedOptSizeY,
+			croppedOptSizeFFTX);
+}
+
+void ProgMovieAlignmentCorrelationGPU::loadData(const MetaData& movie,
+		const Image<double>& dark, const Image<double>& gain,
+		double targetOccupancy, const MultidimArray<double>& lpf) {
+	// allocate space for data on CPU
+	Image<float> frame;
+	MultidimArray<float> filter;
+	bool cropInput = (yDRcorner != -1);
+	int noOfImgs = nlast - nfirst + 1;
+	int noOfCorrelations = std::ceil((noOfImgs * (noOfImgs - 1.f)) / 2.f);
+
+
+
+	// get frame info
+	loadFrame(movie, movie.firstObject(), cropInput, frame);
+	setSizes(frame, noOfImgs);
+	// prepare filter
+	filter.initZeros(croppedOptSizeY, croppedOptSizeFFTX);
+	scaleLPF(lpf, croppedOptSizeX, croppedOptSizeY, targetOccupancy, filter);
+	float* d_filter = loadToGPU(filter.data, croppedOptSizeFFTX * croppedOptSizeY);
+
+	// load all frames to RAM
+	float* imgs = loadToRAM(movie, noOfImgs, dark, gain, cropInput);
+	std::complex<float>* scaledFFTs = new std::complex<float>[noOfImgs * croppedOptSizeFFTX * croppedOptSizeY](); // FIXME this can be unified with imgs
 
 	//	Image<float> aaaa(inputOptSizeX, inputOptSizeY, 1, noOfImgs);
 	//	aaaa.data.data = imgs;
