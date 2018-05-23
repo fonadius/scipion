@@ -81,10 +81,10 @@ size_t getFreeMem(int device) {
 	return cuFFTAdvisor::toMB(cuFFTAdvisor::getFreeMemory(device));
 }
 
-void getBestSize(int imgsToProcess, int origXSize, int origYSize, int &batchSize, int &xSize, int &ySize) {
+void getBestSize(int imgsToProcess, int origXSize, int origYSize, int &batchSize, int &xSize, int &ySize, int extraMem) {
 	int device = 0; // FIXME detect device or add to cmd param
 
-	size_t freeMem = getFreeMem(device);
+	size_t freeMem = getFreeMem(device) - extraMem;
 	std::vector<cuFFTAdvisor::BenchmarkResult const *> *results =
 			cuFFTAdvisor::Advisor::find(50, device,
 					origXSize, origYSize, 1, imgsToProcess,
@@ -98,6 +98,7 @@ void getBestSize(int imgsToProcess, int origXSize, int origYSize, int &batchSize
 	batchSize = results->at(0)->transform->N;
 	xSize = results->at(0)->transform->X;
 	ySize = results->at(0)->transform->Y;
+	results->at(0)->print(stdout);
 }
 
 float* loadToGPU(float* data, size_t items) {

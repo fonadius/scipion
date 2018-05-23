@@ -105,6 +105,15 @@ int getMaxBatch() {
 	return 1; // FIXME implement
 }
 
+int getMaxFilterSize(Image<float>& frame) { // FIXME put to header
+	size_t maxXPow2 = std::ceil(log(frame.data.xdim) / log(2));
+	size_t maxX = std::pow(2, maxXPow2);
+	size_t maxFFTX = maxX / 2 + 1;
+	size_t maxYPow2 = std::ceil(log(frame.data.ydim) / log(2));
+	size_t maxY = std::pow(2, maxYPow2);
+	size_t bytes = maxFFTX * maxY * sizeof(float);
+	return bytes / (1024*1024);
+}
 
 void ProgMovieAlignmentCorrelationGPU::loadData(const MetaData& movie,
 		const Image<double>& dark, const Image<double>& gain,
@@ -122,12 +131,15 @@ void ProgMovieAlignmentCorrelationGPU::loadData(const MetaData& movie,
 
 	// get frame info
 	loadFrame(movie, movie.firstObject(), cropInput, frame);
+	int maxFilterSize = getMaxFilterSize(frame);
 
 	// get best sizes
 	if (verbose) std::cerr << "Benchmarking cuFFT ..." << std::endl;
-	getBestSize(noOfImgs, frame.data.xdim, frame.data.ydim, inputOptBatchSize, inputOptSizeX, inputOptSizeY);
+	// we also need enough memory for filter
+	getBestSize(noOfImgs, frame.data.xdim, frame.data.ydim, inputOptBatchSize, inputOptSizeX, inputOptSizeY, maxFilterSize);
 	inputOptSizeFFTX = inputOptSizeX / 2 + 1;
 	printf("best FFT for input is %d images of %d x %d (%d)\n", inputOptBatchSize, inputOptSizeX, inputOptSizeY, inputOptSizeFFTX);
+	// no extra memory needed
 	getBestSize(getMaxBatch(), newXdim, newYdim, croppedOptBatchSize, croppedOptSizeX, croppedOptSizeY);
 	croppedOptSizeFFTX = croppedOptSizeX / 2 + 1;
 	printf("best FFT for cropped imgs is %d images of %d x %d (%d)\n", croppedOptBatchSize, croppedOptSizeX, croppedOptSizeY, croppedOptSizeFFTX);
@@ -135,7 +147,7 @@ void ProgMovieAlignmentCorrelationGPU::loadData(const MetaData& movie,
 	// prepare filter
 	filter.initZeros(croppedOptSizeY, croppedOptSizeFFTX);
 	scaleLPF(lpf, croppedOptSizeX, croppedOptSizeY, targetOccupancy, filter);
-	float* d_filter = loadToGPU(filter.data, croppedOptSizeFFTX * croppedOptSizeY); // FIXME this will consume some memory on GPU. Previous best batch size estimation might be invalid
+	float* d_filter = loadToGPU(filter.data, croppedOptSizeFFTX * croppedOptSizeY);
 
 	// load all frames to RAM
 	float* imgs = new float[noOfImgs * inputOptSizeX * inputOptSizeY](); // FIXME this can be unified with imgs

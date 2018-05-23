@@ -6,7 +6,8 @@ float* loadToGPU(float* data, size_t items);
 
 void release(float* data);
 
-void getBestSize(int imgsToProcess, int origXSize, int origYSize, int &batchSize, int &xSize, int &ySize);
+void getBestSize(int imgsToProcess, int origXSize, int origYSize, int &batchSize, int &xSize, int &ySize,
+		int extraMem = 0);
 size_t getFreeMem(int device);
 
 void kernel1(float* imgs, size_t oldX, size_t oldY, int noOfImages, size_t newX, size_t newY,
