@@ -195,8 +195,7 @@ void ProgMovieAlignmentCorrelationGPU::loadData(const MetaData& movie,
 
 	// load all frames to RAM
 	float* imgs = loadToRAM(movie, noOfImgs, dark, gain, cropInput);
-	std::complex<float>* scaledFFTs; // FIXME this can be unified with imgs
-	scaledFFTs = performFFTAndScale(imgs, noOfImgs, inputOptSizeX, inputOptSizeY, inputOptBatchSize, croppedOptSizeFFTX, croppedOptSizeY, d_filter);
+	tmpResult = performFFTAndScale(imgs, noOfImgs, inputOptSizeX, inputOptSizeY, inputOptBatchSize, croppedOptSizeFFTX, croppedOptSizeY, d_filter);
 
 
 //	float* imgsToProcess = imgs;
@@ -207,7 +206,7 @@ void ProgMovieAlignmentCorrelationGPU::loadData(const MetaData& movie,
 //		result += croppedOptSizeFFTX * croppedOptSizeY * inputOptBatchSize;
 //		imgsToProcess = std::min(imgsEnd, imgsToProcess + inputOptSizeX * inputOptSizeY * inputOptBatchSize);
 //	}
-	delete[] imgs;
+//	delete[] imgs;
 	release(d_filter);
 //
 //	printf("hotovo\n");

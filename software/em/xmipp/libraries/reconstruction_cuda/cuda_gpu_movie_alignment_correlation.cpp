@@ -78,18 +78,15 @@ void kernel2(const float2* __restrict__ src, float2* dest, int noOfImages, size_
 }
 
 
-std::complex<float>* performFFTAndScale(float* h_imgs, int noOfImgs,
+std::complex<float>* performFFTAndScale(float* inOutData, int noOfImgs,
 		int inSizeX, int inSizeY, int inBatch,
 		int outSizeX, int outSizeY,  float* d_filter) {
 	mycufftHandle handleInput;
-
-//	float* imgsStart = h_imgs;
-//	float* imgsEnd = imgsStart + noOfImgs * inSizeX * inSizeY;
-	std::complex<float>* result = new std::complex<float>[noOfImgs * outSizeX * outSizeY];
 	int counter = 0;
+	std::complex<float>* result = (std::complex<float>*)inOutData;
 	while (counter < noOfImgs) {
 		int imgToProcess = std::min(inBatch, noOfImgs - counter);
-		float* imgLoad = h_imgs + counter * inSizeX * inSizeY;
+		float* imgLoad = inOutData + counter * inSizeX * inSizeY;
 		std::complex<float>* imgStore = result + counter * outSizeX * outSizeY;
 		processInput(imgLoad, inSizeX, inSizeY, imgToProcess, outSizeX, outSizeY, d_filter, imgStore);
 		counter += inBatch;
