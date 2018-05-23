@@ -81,17 +81,17 @@ void kernel2(const float2* __restrict__ src, float2* dest, int noOfImages, size_
 std::complex<float>* performFFTAndScale(float* inOutData, int noOfImgs,
 		int inSizeX, int inSizeY, int inBatch,
 		int outSizeX, int outSizeY,  float* d_filter) {
-	mycufftHandle handleInput;
+	mycufftHandle handle;
 	int counter = 0;
-	std::complex<float>* result = (std::complex<float>*)inOutData;
+	std::complex<float>* h_result = (std::complex<float>*)inOutData;
 	while (counter < noOfImgs) {
 		int imgToProcess = std::min(inBatch, noOfImgs - counter);
-		float* imgLoad = inOutData + counter * inSizeX * inSizeY;
-		std::complex<float>* imgStore = result + counter * outSizeX * outSizeY;
-		processInput(imgLoad, inSizeX, inSizeY, imgToProcess, outSizeX, outSizeY, d_filter, imgStore);
+		float* h_imgLoad = inOutData + counter * inSizeX * inSizeY;
+		std::complex<float>* h_imgStore = h_result + counter * outSizeX * outSizeY;
+		processInput(h_imgLoad, inSizeX, inSizeY, imgToProcess, outSizeX, outSizeY, d_filter, h_imgStore);
 		counter += inBatch;
 	}
-	return result;
+	return h_result;
 }
 
 size_t getFreeMem(int device) {
