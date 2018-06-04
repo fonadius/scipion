@@ -7,6 +7,8 @@ float* loadToGPU(float* data, size_t items);
 
 void release(float* data);
 
+size_t getFreeMem(int device);
+
 void getBestSize(int imgsToProcess, int origXSize, int origYSize, int &batchSize, int &xSize, int &ySize,
 		int extraMem = 0);
 size_t getFreeMem(int device);
@@ -32,3 +34,7 @@ void processInput(GpuMultidimArrayAtGpu<float>& imagesGPU,
 		std::complex<float>* result);
 
 
+
+void computeCorrelations(double maxShift, size_t noOfImgs, std::complex<float>* h_FFTs,
+		int fftSizeX, int imgSizeX, int imgSizeY, size_t maxFFTsInBuffer,
+		int fftBatchSize, std::complex<float>*& result);

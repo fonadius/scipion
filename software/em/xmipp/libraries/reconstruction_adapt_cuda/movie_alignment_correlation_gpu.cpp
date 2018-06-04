@@ -101,10 +101,6 @@ void ProgMovieAlignmentCorrelationGPU::loadFrame(const MetaData& movie, size_t o
 	}
 }
 
-int getMaxBatch() {
-	return 1; // FIXME implement
-}
-
 int getMaxFilterSize(Image<float>& frame) { // FIXME put to header
 	size_t maxXPow2 = std::ceil(log(frame.data.xdim) / log(2));
 	size_t maxX = std::pow(2, maxXPow2);
@@ -161,19 +157,27 @@ void ProgMovieAlignmentCorrelationGPU::setSizes(Image<float> frame,
 	if (verbose)
 		std::cerr << "Benchmarking cuFFT ..." << std::endl;
 
+
+	size_t availableMemMB = getFreeMem(0); // FIXME pass device
+	size_t noOfCorrelations = (noOfImgs * (noOfImgs-1)) / 2;
+	correlationBufferSizeMB = availableMemMB / 3; // divide available memory to 3 parts (2 buffers + 1 FFT)
+
 	// we also need enough memory for filter
 	getBestSize(noOfImgs, frame.data.xdim, frame.data.ydim, inputOptBatchSize,
 			inputOptSizeX, inputOptSizeY, maxFilterSize);
 	inputOptSizeFFTX = inputOptSizeX / 2 + 1;
 	printf("best FFT for input is %d images of %d x %d (%d)\n",
 			inputOptBatchSize, inputOptSizeX, inputOptSizeY, inputOptSizeFFTX);
-	// no extra memory needed
-	getBestSize(getMaxBatch(), newXdim, newYdim, croppedOptBatchSize,
-			croppedOptSizeX, croppedOptSizeY);
+
+	getBestSize(noOfCorrelations, newXdim, newYdim, croppedOptBatchSize,
+			croppedOptSizeX, croppedOptSizeY, correlationBufferSizeMB * 2);
 	croppedOptSizeFFTX = croppedOptSizeX / 2 + 1;
 	printf("best FFT for cropped imgs is %d images of %d x %d (%d)\n",
 			croppedOptBatchSize, croppedOptSizeX, croppedOptSizeY,
 			croppedOptSizeFFTX);
+
+	float corrSizeMB = ((size_t)croppedOptSizeFFTX * croppedOptSizeY * sizeof(std::complex<float>)) / 1048576.f;
+	correlationBufferImgs = std::ceil(correlationBufferSizeMB / corrSizeMB);
 }
 
 void ProgMovieAlignmentCorrelationGPU::loadData(const MetaData& movie,
@@ -269,6 +273,10 @@ void ProgMovieAlignmentCorrelationGPU::computeShifts(size_t N,
 		const Matrix1D<double>& bX, const Matrix1D<double>& bY,
 		const Matrix2D<double>& A) {
 
+	std::complex<float>* correlations;
+	computeCorrelations(maxShift, N, tmpResult,
+			croppedOptSizeFFTX, croppedOptSizeX, croppedOptSizeY, correlationBufferImgs,
+			croppedOptBatchSize, correlations);
 
 	float* result1;
 	std::complex<float>* result2;

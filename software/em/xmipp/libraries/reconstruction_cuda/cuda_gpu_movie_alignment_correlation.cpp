@@ -317,7 +317,66 @@ void kernel4(const float2* __restrict__ imgs, float2* correlations, int xDim, in
 		}
 }
 
+void computeCorrelations(void* d_in1, size_t in1Size, void* d_in2, size_t in2Size,
+		int fftSizeX, int imgSizeX, int imgSizeY, int fftBatchSize, size_t fixmeOffset1, size_t fixmeOffset2) {
+	bool isWithin = d_in1 == d_in2; // correlation is done within the same buffer
 
+	for (int i = 0; i < in1Size; i++) {
+		for (int j = isWithin ? i + 1 : 0; j < in2Size; j++) {
+			printf("correlation %03d - %03d\n", i+fixmeOffset1, j+fixmeOffset2);
+			// tohle bude kernel . musi vracet i a j, podle toho kde skoncil
+		}
+	}
+}
+
+void computeCorrelations(double maxShift, size_t noOfImgs, std::complex<float>* h_FFTs,
+		int fftSizeX, int imgSizeX, int imgSizeY, size_t maxFFTsInBuffer,
+		int fftBatchSize, std::complex<float>*& result) {
+
+	size_t singleFFTPixels = fftSizeX * imgSizeY;
+	size_t singleFFTBytes = singleFFTPixels * sizeof(float2);
+
+	size_t buffer1Size = std::min(maxFFTsInBuffer, noOfImgs);
+	void* d_fftBuffer1;
+	gpuMalloc((void**) &d_fftBuffer1, buffer1Size * singleFFTBytes);
+
+	void* d_fftBuffer2;
+	size_t buffer2Size = std::max((size_t)0, std::min(maxFFTsInBuffer, noOfImgs - buffer1Size));
+	gpuMalloc((void**) &d_fftBuffer2, buffer2Size * singleFFTBytes);
+
+	size_t buffer1Offset = 0;
+	size_t buffer2Offset = buffer1Size;
+	do {
+		printf("copying data 1 ... \n");
+		size_t buffer1ToCopy = std::min(buffer1Size, noOfImgs - buffer1Offset);
+		printf("buffer 1 starts at %d, length %d\n", buffer1Offset, buffer1ToCopy);
+		size_t inputOffsetBuffer1 = buffer1Offset * singleFFTPixels;
+		gpuErrchk(cudaMemset(d_fftBuffer1, 0.f, buffer1ToCopy * singleFFTBytes));
+		gpuErrchk(cudaMemcpy(d_fftBuffer1, h_FFTs + inputOffsetBuffer1, buffer1ToCopy * singleFFTBytes, cudaMemcpyHostToDevice));
+
+		// compute inter-buffer correlations
+		printf("computing inter-buffer correlations... \n");
+		computeCorrelations(d_fftBuffer1, buffer1ToCopy, d_fftBuffer1, buffer1ToCopy, fftSizeX, imgSizeX, imgSizeY, fftBatchSize, buffer1Offset, buffer1Offset);
+		while (buffer2Offset < noOfImgs) {
+			// copy other buffer
+			printf("copying data 2 ... \n");
+			size_t buffer2ToCopy = std::min(buffer2Size, noOfImgs - buffer2Offset);
+			printf("buffer 2 starts at %d, length %d\n", buffer2Offset, buffer2ToCopy);
+			size_t inputOffsetBuffer2 = buffer2Offset * singleFFTPixels;
+			gpuErrchk(cudaMemset(d_fftBuffer2, 0.f, buffer2ToCopy * singleFFTBytes));
+			gpuErrchk(cudaMemcpy(d_fftBuffer2, h_FFTs + inputOffsetBuffer2, buffer2ToCopy * singleFFTBytes, cudaMemcpyHostToDevice));
+
+			printf("computing extra-buffer correlations... \n");
+			computeCorrelations(d_fftBuffer1, buffer1ToCopy, d_fftBuffer2, buffer2ToCopy, fftSizeX, imgSizeX, imgSizeY, fftBatchSize, buffer1Offset, buffer2Offset);
+
+			buffer2Offset += buffer2ToCopy;
+		}
+
+		buffer1Offset += buffer1ToCopy;
+
+	} while (buffer1Offset < noOfImgs);
+
+}
 
 
 void kernel3(float maxShift, size_t noOfImgs, const std::complex<float>* imgs, size_t fftXdim, size_t fftYdim, float*& result,

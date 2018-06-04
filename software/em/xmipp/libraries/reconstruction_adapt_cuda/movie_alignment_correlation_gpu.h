@@ -63,6 +63,9 @@ private:
 	int croppedOptSizeY;
 	int croppedOptSizeFFTX;
 	int croppedOptBatchSize;
+
+	int correlationBufferSizeMB;
+	int correlationBufferImgs;
 };
 
 
