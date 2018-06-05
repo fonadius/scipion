@@ -150,6 +150,7 @@ float* ProgMovieAlignmentCorrelationGPU::loadToRAM(const MetaData& movie, int no
 	return imgs;
 }
 
+#pragma GCC optimize("O0") // FIXME
 void ProgMovieAlignmentCorrelationGPU::setSizes(Image<float> frame,
 		int noOfImgs) {
 	// get best sizes
@@ -163,14 +164,25 @@ void ProgMovieAlignmentCorrelationGPU::setSizes(Image<float> frame,
 	correlationBufferSizeMB = availableMemMB / 3; // divide available memory to 3 parts (2 buffers + 1 FFT)
 
 	// we also need enough memory for filter
-	getBestSize(noOfImgs, frame.data.xdim, frame.data.ydim, inputOptBatchSize,
-			inputOptSizeX, inputOptSizeY, maxFilterSize);
+//	getBestSize(noOfImgs, frame.data.xdim, frame.data.ydim, inputOptBatchSize,
+//			inputOptSizeX, inputOptSizeY, maxFilterSize); // FIXME uncomment
+	inputOptBatchSize = 7;
+	inputOptSizeX = 4096;
+	inputOptSizeY = 4096;
+
 	inputOptSizeFFTX = inputOptSizeX / 2 + 1;
 	printf("best FFT for input is %d images of %d x %d (%d)\n",
 			inputOptBatchSize, inputOptSizeX, inputOptSizeY, inputOptSizeFFTX);
 
-	getBestSize(noOfCorrelations, newXdim, newYdim, croppedOptBatchSize,
-			croppedOptSizeX, croppedOptSizeY, correlationBufferSizeMB * 2);
+
+	printf("benchmarking for %d imgs of %d x %d, %d of Memory (out of %d)\n",
+			noOfCorrelations, newXdim, newYdim, correlationBufferSizeMB * 2, availableMemMB);
+//	getBestSize(noOfCorrelations, newXdim, newYdim, croppedOptBatchSize,
+//			croppedOptSizeX, croppedOptSizeY, correlationBufferSizeMB * 2); // FIXME uncomment
+	croppedOptBatchSize = 15;
+	croppedOptSizeX =  2592;
+	croppedOptSizeY = 2304;
+
 	croppedOptSizeFFTX = croppedOptSizeX / 2 + 1;
 	printf("best FFT for cropped imgs is %d images of %d x %d (%d)\n",
 			croppedOptBatchSize, croppedOptSizeX, croppedOptSizeY,
@@ -178,6 +190,8 @@ void ProgMovieAlignmentCorrelationGPU::setSizes(Image<float> frame,
 
 	float corrSizeMB = ((size_t)croppedOptSizeFFTX * croppedOptSizeY * sizeof(std::complex<float>)) / 1048576.f;
 	correlationBufferImgs = std::ceil(correlationBufferSizeMB / corrSizeMB);
+
+	printf("one correlation %f MB, buffer (%d) will hold %d imgs\n", corrSizeMB, correlationBufferSizeMB, correlationBufferImgs);
 }
 
 void ProgMovieAlignmentCorrelationGPU::loadData(const MetaData& movie,
@@ -215,12 +229,12 @@ void ProgMovieAlignmentCorrelationGPU::loadData(const MetaData& movie,
 //
 //	printf("hotovo\n");
 //	fflush(stdout);
-//	Image<double> bbb(croppedOptSizeFFTX, croppedOptSizeY, 1, noOfImgs);
-//	for (size_t i = 0; i < ((size_t)croppedOptSizeFFTX * croppedOptSizeY * noOfImgs); i++) {
-//		double d = scaledFFTs[i].real() / (frame.data.xdim*frame.data.ydim);
-//		if (d < 3) bbb.data[i] = d;
-//	}
-//	bbb.write("fftFromGPU_nove.vol");
+	Image<double> bbb(croppedOptSizeFFTX, croppedOptSizeY, 1, noOfImgs);
+	for (size_t i = 0; i < ((size_t)croppedOptSizeFFTX * croppedOptSizeY * noOfImgs); i++) {
+		double d = tmpResult[i].real() / (frame.data.xdim*frame.data.ydim);
+		if (d < 3) bbb.data[i] = d;
+	}
+	bbb.write("fftFromGPU_nove.vol");
 //	printf("juchuuu\n");
 //	fflush(stdout);
 
@@ -277,6 +291,7 @@ void ProgMovieAlignmentCorrelationGPU::computeShifts(size_t N,
 	computeCorrelations(maxShift, N, tmpResult,
 			croppedOptSizeFFTX, croppedOptSizeX, croppedOptSizeY, correlationBufferImgs,
 			croppedOptBatchSize, correlations);
+return;
 
 	float* result1;
 	std::complex<float>* result2;
@@ -284,7 +299,6 @@ void ProgMovieAlignmentCorrelationGPU::computeShifts(size_t N,
 	std::cout << "kernel3 done" << std::endl;
 	size_t framexdim = 4096;
 	size_t frameydim = 4096; // FIXME
-
 
 //	size_t newFFTXDim = newXdim/2+1;
 //	int noOfCorrelations = (N * (N-1)/2);

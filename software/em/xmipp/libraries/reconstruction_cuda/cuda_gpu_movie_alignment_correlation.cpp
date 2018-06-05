@@ -317,13 +317,65 @@ void kernel4(const float2* __restrict__ imgs, float2* correlations, int xDim, in
 		}
 }
 
+#pragma GCC optimize("O0") // FIXME
+void test(bool isWithin, int iStart, int iStop, int jStart, int jStop, size_t jSize, size_t offset1, size_t offset2) {
+//	int i = iStart;
+//	int j = jStart;
+//	while (i != iStop || j != jStop) {
+//		printf("correlation %03d - %03d\n", i+offset1, j+offset2);
+//		if (j == jSize - 1) {
+//			i++;
+//			j = isWithin ? i + 1 : 0;
+//		} else {
+//			j++;
+//		}
+//	}
+
+	bool compute = false;
+	for (int i = iStart; i <= iStop; i++) {
+		for (int j = isWithin ? i + 1 : 0; j < jSize; j++) {
+			if (!compute) {// && (iStart == i) && (jStart == j)) {
+				compute = true;
+				j = jStart;
+				continue; // skip first iteration
+			}
+			if (compute) {
+				printf("correlation %03d - %03d\n", i+offset1, j+offset2);
+			}
+			if ((iStop == i) && (jStop == j)) {
+				return;
+			}
+		}
+	}
+//
+//
+//	int counter = 0;
+//	for (int i = iStart; i < iStop; i++) {
+//		for (int j = jStart; j < jStop; j++) {
+//			printf("correlation %03d - %03d\n", i+offset1, j+offset2);
+//		}
+//	}
+}
+
 void computeCorrelations(void* d_in1, size_t in1Size, void* d_in2, size_t in2Size,
 		int fftSizeX, int imgSizeX, int imgSizeY, int fftBatchSize, size_t fixmeOffset1, size_t fixmeOffset2) {
 	bool isWithin = d_in1 == d_in2; // correlation is done within the same buffer
 
+	size_t counter = 0;
+	int origI = 0;
+	int origJ = isWithin ? 0 : -1; // kernel must skip first iteration
 	for (int i = 0; i < in1Size; i++) {
 		for (int j = isWithin ? i + 1 : 0; j < in2Size; j++) {
-			printf("correlation %03d - %03d\n", i+fixmeOffset1, j+fixmeOffset2);
+			counter++;
+			bool isLastIIter = isWithin ? (i == in1Size - 2) : (i == in1Size -1);
+			if (counter == fftBatchSize || (isLastIIter && (j == in2Size -1)) ) {
+				// kernel must perform last iteration
+				printf("volej kernel, i: %d-%d j: %d-%d, len = %lu\n", origI, i, origJ, j, counter);
+				test(isWithin, origI, i, origJ, j, in2Size, fixmeOffset1, fixmeOffset2);
+				origI = i;
+				origJ = j;
+				counter = 0;
+			}
 			// tohle bude kernel . musi vracet i a j, podle toho kde skoncil
 		}
 	}
