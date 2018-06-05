@@ -180,7 +180,7 @@ void ProgMovieAlignmentCorrelationGPU::setSizes(Image<float> frame,
 //	getBestSize(noOfCorrelations, newXdim, newYdim, croppedOptBatchSize,
 //			croppedOptSizeX, croppedOptSizeY, correlationBufferSizeMB * 2); // FIXME uncomment
 	croppedOptBatchSize = 15;
-	croppedOptSizeX =  2592;
+	croppedOptSizeX =  2304;
 	croppedOptSizeY = 2304;
 
 	croppedOptSizeFFTX = croppedOptSizeX / 2 + 1;
@@ -287,18 +287,26 @@ void ProgMovieAlignmentCorrelationGPU::computeShifts(size_t N,
 		const Matrix1D<double>& bX, const Matrix1D<double>& bY,
 		const Matrix2D<double>& A) {
 
-	std::complex<float>* correlations;
+	float* correlations;
 	computeCorrelations(maxShift, N, tmpResult,
 			croppedOptSizeFFTX, croppedOptSizeX, croppedOptSizeY, correlationBufferImgs,
 			croppedOptBatchSize, correlations);
-return;
 
-	float* result1;
-	std::complex<float>* result2;
-	kernel3(maxShift, N, tmpResult, newXdim/2+1, newYdim, result1, result2);
-	std::cout << "kernel3 done" << std::endl;
-	size_t framexdim = 4096;
-	size_t frameydim = 4096; // FIXME
+	int noOfCorrelations = (N * (N-1))/2;
+	Image<float> imgs(croppedOptSizeX, croppedOptSizeY, 1, noOfCorrelations);
+	imgs.data.data = correlations;
+	imgs.write("correlationIFFTGPU_nove.vol");
+
+
+
+//return;
+
+//	float* result1;
+//	std::complex<float>* result2;
+//	kernel3(maxShift, N, tmpResult, newXdim/2+1, newYdim, result1, result2);
+//	std::cout << "kernel3 done" << std::endl;
+//	size_t framexdim = 4096;
+//	size_t frameydim = 4096; // FIXME
 
 //	size_t newFFTXDim = newXdim/2+1;
 //	int noOfCorrelations = (N * (N-1)/2);
@@ -312,10 +320,10 @@ return;
 	int idx = 0;
 	for (size_t i = 0; i < N - 1; ++i) {
 		for (size_t j = i + 1; j < N; ++j) {
-			MultidimArray<double> Mcorr (newYdim, newXdim);
-			size_t offset = idx * newYdim * newXdim;
-			for (size_t t = 0; t < newYdim * newXdim; t++) {
-				Mcorr.data[t] = result1[offset + t];
+			MultidimArray<double> Mcorr (croppedOptSizeY, croppedOptSizeX);
+			size_t offset = idx * croppedOptSizeX * croppedOptSizeY;
+			for (size_t t = 0; t < croppedOptSizeX * croppedOptSizeY; t++) {
+				Mcorr.data[t] = correlations[offset + t] / (croppedOptSizeX * croppedOptSizeY);
 			}
 //			CenterFFT(Mcorr, true);
 			Mcorr.setXmippOrigin();

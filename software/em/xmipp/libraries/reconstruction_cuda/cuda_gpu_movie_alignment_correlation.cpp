@@ -290,23 +290,61 @@ __global__ void fftshift_2D(double2 *data, int N1, int N2)
 __global__
 void kernel4(const float2* __restrict__ imgs, float2* correlations, int xDim, int yDim, int noOfImgs) {
 	// assign pixel to thread
-		volatile int idx = blockIdx.x*blockDim.x + threadIdx.x;
-		volatile int idy = blockIdx.y*blockDim.y + threadIdx.y;
-		float a = 1-2*((idx+idy)&1); // center FFT
+	volatile int idx = blockIdx.x*blockDim.x + threadIdx.x;
+	volatile int idy = blockIdx.y*blockDim.y + threadIdx.y;
+	float a = 1-2*((idx+idy)&1); // center FFT
 
 //		if (idx == 0 && idy ==0) {
 //			printf("kernel4 called %p %p %d %d %d\n", imgs, correlations, xDim, yDim, noOfImgs);
 //		}
-		if (idx >= xDim || idy >= yDim ) return;
-		size_t pixelIndex = idy*xDim + idx; // index within single image
+	if (idx >= xDim || idy >= yDim ) return;
+	size_t pixelIndex = idy*xDim + idx; // index within single image
 
-		int counter = 0;
-		for (int i = 0; i < (noOfImgs - 1); i++) {
-			int tmpOffset = i * xDim * yDim;
-			float2 tmp = imgs[tmpOffset + pixelIndex];
-			for (int j = i+1; j < noOfImgs; j++) {
+	int counter = 0;
+	for (int i = 0; i < (noOfImgs - 1); i++) {
+		int tmpOffset = i * xDim * yDim;
+		float2 tmp = imgs[tmpOffset + pixelIndex];
+		for (int j = i+1; j < noOfImgs; j++) {
+			int tmp2Offset = j * xDim * yDim;
+			float2 tmp2 = imgs[tmp2Offset + pixelIndex];
+			float2 res;
+			// FIXME why conjugate and multiply?
+			res.x = ((tmp.x*tmp2.x) + (tmp.y*tmp2.y))*(yDim*yDim);
+			res.y = ((tmp.y*tmp2.x) - (tmp.x*tmp2.y))*(yDim*yDim);
+			correlations[counter*xDim*yDim + pixelIndex] = res*a;
+			counter++;
+		}
+	}
+}
+
+__global__
+void correlate(const float2* __restrict__ in1, const float2* __restrict__ in2, float2* correlations, int xDim, int yDim, int noOfImgs,
+		bool isWithin, int iStart, int iStop, int jStart, int jStop, size_t jSize, size_t offset1, size_t offset2) {
+	// assign pixel to thread
+	volatile int idx = blockIdx.x*blockDim.x + threadIdx.x;
+	volatile int idy = blockIdx.y*blockDim.y + threadIdx.y;
+	float a = 1-2*((idx+idy)&1); // center FFT
+
+//		if (idx == 0 && idy ==0) {
+//			printf("kernel4 called %p %p %d %d %d\n", imgs, correlations, xDim, yDim, noOfImgs);
+//		}
+	if (idx >= xDim || idy >= yDim ) return;
+	size_t pixelIndex = idy*xDim + idx; // index within single image
+
+	bool compute = false;
+	int counter = 0;
+	for (int i = iStart; i <= iStop; i++) {
+		int tmpOffset = i * xDim * yDim;
+		for (int j = isWithin ? i + 1 : 0; j < jSize; j++) {
+			if (!compute) {// && (iStart == i) && (jStart == j)) {
+				compute = true;
+				j = jStart;
+				continue; // skip first iteration
+			}
+			if (compute) {
+				float2 tmp = in1[tmpOffset + pixelIndex];
 				int tmp2Offset = j * xDim * yDim;
-				float2 tmp2 = imgs[tmp2Offset + pixelIndex];
+				float2 tmp2 = in2[tmp2Offset + pixelIndex];
 				float2 res;
 				// FIXME why conjugate and multiply?
 				res.x = ((tmp.x*tmp2.x) + (tmp.y*tmp2.y))*(yDim*yDim);
@@ -314,8 +352,13 @@ void kernel4(const float2* __restrict__ imgs, float2* correlations, int xDim, in
 				correlations[counter*xDim*yDim + pixelIndex] = res*a;
 				counter++;
 			}
+			if ((iStop == i) && (jStop == j)) {
+				return;
+			}
 		}
+	}
 }
+
 
 #pragma GCC optimize("O0") // FIXME
 void test(bool isWithin, int iStart, int iStop, int jStart, int jStop, size_t jSize, size_t offset1, size_t offset2) {
@@ -358,9 +401,19 @@ void test(bool isWithin, int iStart, int iStop, int jStart, int jStop, size_t jS
 }
 
 void computeCorrelations(void* d_in1, size_t in1Size, void* d_in2, size_t in2Size,
-		int fftSizeX, int imgSizeX, int imgSizeY, int fftBatchSize, size_t fixmeOffset1, size_t fixmeOffset2) {
+		int fftSizeX, int imgSizeX, int imgSizeY, int fftBatchSize, size_t fixmeOffset1, size_t fixmeOffset2,
+		GpuMultidimArrayAtGpu<std::complex<float> >& ffts,
+			GpuMultidimArrayAtGpu<float>& imgs, mycufftHandle& handler,
+			float*& result) {
 	bool isWithin = d_in1 == d_in2; // correlation is done within the same buffer
 
+	dim3 dimBlock(BLOCK_DIM_X, BLOCK_DIM_X);
+	dim3 dimGrid(ceil(fftSizeX/(float)dimBlock.x), ceil(imgSizeY/(float)dimBlock.y));
+//		kernel4<<<dimGrid, dimBlock>>>((float2*)d_imgs,(float2*) d_corrs, fftXdim, fftYdim, noOfImgs);
+
+	size_t singleImgPixels = imgSizeX * imgSizeY;
+
+	size_t batchCounter = 0;
 	size_t counter = 0;
 	int origI = 0;
 	int origJ = isWithin ? 0 : -1; // kernel must skip first iteration
@@ -371,10 +424,20 @@ void computeCorrelations(void* d_in1, size_t in1Size, void* d_in2, size_t in2Siz
 			if (counter == fftBatchSize || (isLastIIter && (j == in2Size -1)) ) {
 				// kernel must perform last iteration
 				printf("volej kernel, i: %d-%d j: %d-%d, len = %lu\n", origI, i, origJ, j, counter);
-				test(isWithin, origI, i, origJ, j, in2Size, fixmeOffset1, fixmeOffset2);
+				correlate<<<dimGrid, dimBlock>>>((float2*)d_in1, (float2*)d_in2,(float2*)ffts.d_data, fftSizeX, imgSizeY, counter,
+						isWithin, origI, i, origJ, j, in2Size, fixmeOffset1, fixmeOffset2);
+//				test();
+				ffts.ifft(imgs, handler);
+
+				gpuErrchk(cudaMemcpy(result + (singleImgPixels * batchCounter * fftBatchSize),
+						imgs.d_data,
+						counter * singleImgPixels * sizeof(float),
+						cudaMemcpyDeviceToHost));
+
 				origI = i;
 				origJ = j;
 				counter = 0;
+				batchCounter++;
 			}
 			// tohle bude kernel . musi vracet i a j, podle toho kde skoncil
 		}
@@ -383,10 +446,19 @@ void computeCorrelations(void* d_in1, size_t in1Size, void* d_in2, size_t in2Siz
 
 void computeCorrelations(double maxShift, size_t noOfImgs, std::complex<float>* h_FFTs,
 		int fftSizeX, int imgSizeX, int imgSizeY, size_t maxFFTsInBuffer,
-		int fftBatchSize, std::complex<float>*& result) {
+		int fftBatchSize, float*& result) {
+
+	GpuMultidimArrayAtGpu<std::complex<float> > ffts(fftSizeX, imgSizeY, 1, fftBatchSize);
+	GpuMultidimArrayAtGpu<float> imgs(imgSizeX, imgSizeY, 1, fftBatchSize);
+	mycufftHandle myhandle;
+
+	size_t singleImgPixels = imgSizeX * imgSizeY;
+	size_t noOfCorrelations = (noOfImgs * (noOfImgs-1)) / 2;
 
 	size_t singleFFTPixels = fftSizeX * imgSizeY;
 	size_t singleFFTBytes = singleFFTPixels * sizeof(float2);
+
+	result = new float[noOfCorrelations * singleImgPixels];
 
 	size_t buffer1Size = std::min(maxFFTsInBuffer, noOfImgs);
 	void* d_fftBuffer1;
@@ -408,7 +480,7 @@ void computeCorrelations(double maxShift, size_t noOfImgs, std::complex<float>* 
 
 		// compute inter-buffer correlations
 		printf("computing inter-buffer correlations... \n");
-		computeCorrelations(d_fftBuffer1, buffer1ToCopy, d_fftBuffer1, buffer1ToCopy, fftSizeX, imgSizeX, imgSizeY, fftBatchSize, buffer1Offset, buffer1Offset);
+		computeCorrelations(d_fftBuffer1, buffer1ToCopy, d_fftBuffer1, buffer1ToCopy, fftSizeX, imgSizeX, imgSizeY, fftBatchSize, buffer1Offset, buffer1Offset, ffts, imgs, myhandle, result);
 		while (buffer2Offset < noOfImgs) {
 			// copy other buffer
 			printf("copying data 2 ... \n");
@@ -419,7 +491,7 @@ void computeCorrelations(double maxShift, size_t noOfImgs, std::complex<float>* 
 			gpuErrchk(cudaMemcpy(d_fftBuffer2, h_FFTs + inputOffsetBuffer2, buffer2ToCopy * singleFFTBytes, cudaMemcpyHostToDevice));
 
 			printf("computing extra-buffer correlations... \n");
-			computeCorrelations(d_fftBuffer1, buffer1ToCopy, d_fftBuffer2, buffer2ToCopy, fftSizeX, imgSizeX, imgSizeY, fftBatchSize, buffer1Offset, buffer2Offset);
+			computeCorrelations(d_fftBuffer1, buffer1ToCopy, d_fftBuffer2, buffer2ToCopy, fftSizeX, imgSizeX, imgSizeY, fftBatchSize, buffer1Offset, buffer2Offset, ffts, imgs, myhandle, result);
 
 			buffer2Offset += buffer2ToCopy;
 		}
@@ -428,6 +500,8 @@ void computeCorrelations(double maxShift, size_t noOfImgs, std::complex<float>* 
 
 	} while (buffer1Offset < noOfImgs);
 
+	cudaFree(d_fftBuffer1);
+	cudaFree(d_fftBuffer2);
 }
 
 

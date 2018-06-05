@@ -37,4 +37,4 @@ void processInput(GpuMultidimArrayAtGpu<float>& imagesGPU,
 
 void computeCorrelations(double maxShift, size_t noOfImgs, std::complex<float>* h_FFTs,
 		int fftSizeX, int imgSizeX, int imgSizeY, size_t maxFFTsInBuffer,
-		int fftBatchSize, std::complex<float>*& result);
+		int fftBatchSize, float*& result);
