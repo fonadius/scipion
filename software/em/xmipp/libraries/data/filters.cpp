@@ -1162,8 +1162,13 @@ void covarianceMatrix(const MultidimArray<double> &I, Matrix2D<double> &C)
 	C*=1.0/(YSIZE(I)-1.0);
 }
 
+/* add explicit instantiation to avoid linking issues */
+template double bestShift(MultidimArray<float> &Mcorr,
+               double &shiftX, double &shiftY, const MultidimArray<int> *mask, int maxShift);
+
 /* Best shift -------------------------------------------------------------- */
-double bestShift(MultidimArray<double> &Mcorr,
+template<typename T>
+double bestShift(MultidimArray<T> &Mcorr,
                double &shiftX, double &shiftY, const MultidimArray<int> *mask, int maxShift)
 {
     int imax, jmax, i_actual, j_actual;

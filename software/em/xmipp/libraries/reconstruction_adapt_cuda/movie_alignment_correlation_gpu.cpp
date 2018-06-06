@@ -318,13 +318,14 @@ void ProgMovieAlignmentCorrelationGPU::computeShifts(size_t N,
 //	ffts.write("correlationFFTGPU.vol");
 
 	int idx = 0;
+	MultidimArray<float> Mcorr (croppedOptSizeY, croppedOptSizeX);
 	for (size_t i = 0; i < N - 1; ++i) {
 		for (size_t j = i + 1; j < N; ++j) {
-			MultidimArray<double> Mcorr (croppedOptSizeY, croppedOptSizeX);
 			size_t offset = idx * croppedOptSizeX * croppedOptSizeY;
-			for (size_t t = 0; t < croppedOptSizeX * croppedOptSizeY; t++) {
-				Mcorr.data[t] = correlations[offset + t] / (croppedOptSizeX * croppedOptSizeY);
-			}
+//			for (size_t t = 0; t < croppedOptSizeX * croppedOptSizeY; t++) {
+//				Mcorr.data[t] = correlations[offset + t] / (croppedOptSizeX * croppedOptSizeY);
+//			}
+			Mcorr.data = correlations + offset;
 //			CenterFFT(Mcorr, true);
 			Mcorr.setXmippOrigin();
 			bestShift(Mcorr, bX(idx), bY(idx), NULL, maxShift);
@@ -338,6 +339,7 @@ void ProgMovieAlignmentCorrelationGPU::computeShifts(size_t N,
 			idx++;
 		}
 	}
+	Mcorr.data = NULL;
 
 //	for (int img = 0; img < (N * (N-1)/2); img++) {
 //		MultidimArray<std::complex<double> > V(1, 1, newYdim, newFFTXDim);
