@@ -229,12 +229,12 @@ void ProgMovieAlignmentCorrelationGPU::loadData(const MetaData& movie,
 //
 //	printf("hotovo\n");
 //	fflush(stdout);
-	Image<double> bbb(croppedOptSizeFFTX, croppedOptSizeY, 1, noOfImgs);
-	for (size_t i = 0; i < ((size_t)croppedOptSizeFFTX * croppedOptSizeY * noOfImgs); i++) {
-		double d = tmpResult[i].real() / (frame.data.xdim*frame.data.ydim);
-		if (d < 3) bbb.data[i] = d;
-	}
-	bbb.write("fftFromGPU_nove.vol");
+//	Image<double> bbb(croppedOptSizeFFTX, croppedOptSizeY, 1, noOfImgs);
+//	for (size_t i = 0; i < ((size_t)croppedOptSizeFFTX * croppedOptSizeY * noOfImgs); i++) {
+//		double d = tmpResult[i].real() / (frame.data.xdim*frame.data.ydim);
+//		if (d < 3) bbb.data[i] = d;
+//	}
+//	bbb.write("fftFromGPU_nove.vol");
 //	printf("juchuuu\n");
 //	fflush(stdout);
 
@@ -293,9 +293,9 @@ void ProgMovieAlignmentCorrelationGPU::computeShifts(size_t N,
 			croppedOptBatchSize, correlations);
 
 	int noOfCorrelations = (N * (N-1))/2;
-	Image<float> imgs(croppedOptSizeX, croppedOptSizeY, 1, noOfCorrelations);
-	imgs.data.data = correlations;
-	imgs.write("correlationIFFTGPU_nove.vol");
+//	Image<float> imgs(croppedOptSizeX, croppedOptSizeY, 1, noOfCorrelations);
+//	imgs.data.data = correlations;
+//	imgs.write("correlationIFFTGPU_nove.vol");
 
 
 

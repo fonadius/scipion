@@ -81,14 +81,28 @@ void ProgMovieAlignmentCorrelation::loadData(const MetaData& movie,
 					DIRECT_MULTIDIM_ELEM(*reducedFrameFourier,nn) *= wlpf;
 			}
 			frameFourier.push_back(reducedFrameFourier);
-			Image<double> Vout(newXdim, newYdim);
-			transformer.inverseFourierTransform(*reducedFrameFourier, Vout.data);
-//			Vout.data = transformer.getReal();
-			Vout.write("filteredCroppedInput" + SSTR(n) + ".vol");
+//			Image<double> Vout(newXdim, newYdim);
+//			transformer.inverseFourierTransform(*reducedFrameFourier, Vout.data);
+////			Vout.data = transformer.getReal();
+//			Vout.write("filteredCroppedInput" + SSTR(n) + ".vol");
 		}
 		++n;
 		if (verbose)
 			progress_bar(n);
+
+
+
+//		Image<double> bbb(frameFourier.at(0)->xdim, frameFourier.at(0)->ydim, 1, frameFourier.size());
+//		size_t imgSize = frameFourier.at(0)->yxdim;
+//		for (size_t img = 0; img < frameFourier.size();img++ ) {
+//			for (size_t i = 0; i < ((size_t)frameFourier.at(0)->yxdim); i++) {
+//				double d = frameFourier.at(img)->data[i].real();
+//				if (d < 3) bbb.data[img*imgSize + i] = d;
+//			}
+//		}
+//		bbb.write("fftFromCPU.vol");
+
+
 	}
 	if (verbose)
 		progress_bar(movie.size());

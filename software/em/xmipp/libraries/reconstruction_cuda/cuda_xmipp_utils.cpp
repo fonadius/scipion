@@ -281,7 +281,6 @@ void GpuMultidimArrayAtGpu< std::complex<float> >::ifft(GpuMultidimArrayAtGpu<fl
 			if(NdimNew!=Ndim){
 				gpuErrchkFFT(cufftExecC2R(*planBptr, auxInFFT.d_data, auxOutFFT.d_data));
 			}else{
-				std::cout << planBptr << std::endl;
 				gpuErrchkFFT(cufftExecC2R(*planBptr, (cufftComplex *)&d_data[positionFFT], (cufftReal*)&realSpace.d_data[positionReal]));
 			}
 		}else{
