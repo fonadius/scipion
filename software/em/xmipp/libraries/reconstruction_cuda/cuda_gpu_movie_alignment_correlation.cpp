@@ -8,6 +8,7 @@
 #include "reconstruction_cuda/cuda_basic_math.h"
 
 #define BLOCK_DIM_X 32
+#define TILE 8
 
 // run per each pixel of the dest array
 __global__
@@ -321,8 +322,16 @@ __global__
 void correlate(const float2* __restrict__ in1, const float2* __restrict__ in2, float2* correlations, int xDim, int yDim, int noOfImgs,
 		bool isWithin, int iStart, int iStop, int jStart, int jStop, size_t jSize, size_t offset1, size_t offset2) {
 	// assign pixel to thread
+#if TILE > 1
+	int id = threadIdx.y * blockDim.x + threadIdx.x;
+	int tidX = threadIdx.x % TILE + (id / (blockDim.y * TILE)) * TILE;
+	int tidY = (id / TILE) % blockDim.y;
+	int idx = blockIdx.x*blockDim.x + tidX;
+	int idy = blockIdx.y*blockDim.y + tidY;
+#else
 	volatile int idx = blockIdx.x*blockDim.x + threadIdx.x;
 	volatile int idy = blockIdx.y*blockDim.y + threadIdx.y;
+#endif
 	float a = 1-2*((idx+idy)&1); // center FFT
 
 //		if (idx == 0 && idy ==0) {
@@ -335,6 +344,7 @@ void correlate(const float2* __restrict__ in1, const float2* __restrict__ in2, f
 	int counter = 0;
 	for (int i = iStart; i <= iStop; i++) {
 		int tmpOffset = i * xDim * yDim;
+		float2 tmp = in1[tmpOffset + pixelIndex];
 		for (int j = isWithin ? i + 1 : 0; j < jSize; j++) {
 			if (!compute) {// && (iStart == i) && (jStart == j)) {
 				compute = true;
@@ -342,7 +352,6 @@ void correlate(const float2* __restrict__ in1, const float2* __restrict__ in2, f
 				continue; // skip first iteration
 			}
 			if (compute) {
-				float2 tmp = in1[tmpOffset + pixelIndex];
 				int tmp2Offset = j * xDim * yDim;
 				float2 tmp2 = in2[tmp2Offset + pixelIndex];
 				float2 res;
