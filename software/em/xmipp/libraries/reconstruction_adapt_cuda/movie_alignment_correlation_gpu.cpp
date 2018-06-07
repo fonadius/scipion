@@ -292,10 +292,12 @@ void ProgMovieAlignmentCorrelationGPU::computeShifts(size_t N,
 			croppedOptSizeFFTX, croppedOptSizeX, croppedOptSizeY, correlationBufferImgs,
 			croppedOptBatchSize, correlations);
 
+	int resultSize = maxShift*2+1;
+
 	int noOfCorrelations = (N * (N-1))/2;
-//	Image<float> imgs(croppedOptSizeX, croppedOptSizeY, 1, noOfCorrelations);
-//	imgs.data.data = correlations;
-//	imgs.write("correlationIFFTGPU_nove.vol");
+	Image<float> imgs(resultSize, resultSize, 1, noOfCorrelations);
+	imgs.data.data = correlations;
+	imgs.write("correlationIFFTGPU_nove.vol");
 
 
 
@@ -318,10 +320,10 @@ void ProgMovieAlignmentCorrelationGPU::computeShifts(size_t N,
 //	ffts.write("correlationFFTGPU.vol");
 
 	int idx = 0;
-	MultidimArray<float> Mcorr (croppedOptSizeY, croppedOptSizeX);
+	MultidimArray<float> Mcorr (resultSize, resultSize);
 	for (size_t i = 0; i < N - 1; ++i) {
 		for (size_t j = i + 1; j < N; ++j) {
-			size_t offset = idx * croppedOptSizeX * croppedOptSizeY;
+			size_t offset = idx * resultSize * resultSize;
 //			for (size_t t = 0; t < croppedOptSizeX * croppedOptSizeY; t++) {
 //				Mcorr.data[t] = correlations[offset + t] / (croppedOptSizeX * croppedOptSizeY);
 //			}
