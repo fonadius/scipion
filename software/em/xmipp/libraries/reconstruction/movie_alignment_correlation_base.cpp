@@ -458,6 +458,7 @@ void AProgMovieAlignmentCorrelation::applyShiftsComputeAverage(
 					N++;
 				}
 			}
+//			return;
 
 			j++;
 		}
@@ -496,25 +497,34 @@ void AProgMovieAlignmentCorrelation::correctLoopIndices(const MetaData& movie) {
 
 void AProgMovieAlignmentCorrelation::run()
 {
+	clock_t begin = clock();
     // preprocess input data
     MetaData movie;
 	readMovie(movie);
 	correctLoopIndices(movie);
+	printf("read move, correctLoopIndices took %f\n", ((float)clock()-begin)/CLOCKS_PER_SEC);
 
+	begin = clock();
 	Image<double> dark, gain;
 	loadDarkCorrection(dark);
 	loadGainCorrection(gain);
+	printf("loadCorrections took %f\n", ((float)clock()-begin)/CLOCKS_PER_SEC);
 
     int bestIref;
     if (useInputShifts)
     {
+    	begin = clock();
     	if (!movie.containsLabel(MDL_SHIFT_X)) { // FIXME seems suspicious
     		setZeroShift(movie);
     	}
+    	printf("setZeroShift took %f\n", ((float)clock()-begin)/CLOCKS_PER_SEC);
     } else {
+    	begin = clock();
 		bestIref = findShiftsAndStore(movie, dark, gain);
+		printf("findShifts took %f\n", ((float)clock()-begin)/CLOCKS_PER_SEC);
     }
 
+    begin = clock();
 	size_t N, Ninitial;
 	Image<double> initialMic, averageMicrograph;
     // Apply shifts and compute average
@@ -522,4 +532,5 @@ void AProgMovieAlignmentCorrelation::run()
 			averageMicrograph, N);
 
 	storeResults(initialMic, Ninitial, averageMicrograph, N, movie, bestIref);
+	printf("applying shift and storing took %f\n", ((float)clock()-begin)/CLOCKS_PER_SEC);
 }
