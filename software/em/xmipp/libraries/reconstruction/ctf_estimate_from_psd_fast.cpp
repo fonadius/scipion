@@ -1081,114 +1081,64 @@ void ProgCTFEstimateFromPSDFast::estimate_defoci_fast()
 	}
 	else
 	{
-		double best_defocus, best_K=1;
-		double best_error = heavy_penalization * 1.1;
-		bool first = true;
-		int i;
-		double defocus;
-
-		double defocus0 = 1e3;
-		double defocusF = 100e3;
-		double initial_defocusStep = 8e3;
-		MultidimArray<double> error;
-
-		// Check if there is no initial guess
-		double min_allowed_defocus = 1e3, max_allowed_defocus = 100e3;
-		initial_defocusStep = std::min(defocus_range,20000.0);
-		defocus0 = std::max(1e3,initial_ctfmodel.Defocus- defocus_range);
-		double maxDeviation = std::max(defocus_range,  0.25 * initial_ctfmodel.Defocus);
-		max_allowed_defocus = std::min(100e3,initial_ctfmodel.Defocus + maxDeviation);
-		defocusF = std::min(150e3,initial_ctfmodel.Defocus+ defocus_range);
-		min_allowed_defocus = std::max(1e3,initial_ctfmodel.Defocus - maxDeviation);
-
-		double K_so_far = current_ctfmodel.K;
-		Matrix1D<double> steps(DEFOCUS_PARAMETERS);
-		steps.initConstant(1);
-		steps(1) = 0; // Do not optimize kV
-		steps(2) = 0; // Do not optimize K
-		for (double defocusStep = initial_defocusStep;
-			 defocusStep >= std::min(5000., defocus_range / 2);
-			 defocusStep /= 2)
+		MultidimArray<double> psd_exp_radial2;
+		/*MultidimArray<double> background;
+		generateModelSoFar_fast(background, false);
+		FOR_ALL_ELEMENTS_IN_ARRAY1D(background)
 		{
-			error.resize(CEIL((defocusF - defocus0) / defocusStep + 1));
-			error.initConstant(heavy_penalization);
-			if (show_optimization)
-				std::cout <<"U=[" << defocus0 << "," << defocusF << "]\n"
-				<< "Defocus step=" << defocusStep << std::endl;
-			for (defocus = defocus0, i = 0; defocus <= defocusF; defocus +=
-					 defocusStep, i++)
+			A1D_ELEM(background,i)= background(i)-psd_exp_radial(i);
+		}*/
+		psd_exp_radial2.initZeros(psd_exp_radial);
+		double deltaW=1.0/XSIZE(w_digfreq);
+		double wmax=(XSIZE(w_digfreq)/2.0-1)/XSIZE(w_digfreq);
+		double deltaW2=(wmax*wmax)/(XSIZE(w_digfreq)/2.0-1);
+		FOR_ALL_ELEMENTS_IN_ARRAY1D(psd_exp_radial2)
+		{
+			double w2=i*deltaW2;
+			double w=sqrt(w2);
+			double widx=w/deltaW;
+			size_t lowerIdx=floor(widx);
+			double weight=widx-floor(widx);
+			A1D_ELEM(psd_exp_radial2,i)=(1-weight)*A1D_ELEM(psd_exp_radial,lowerIdx)
+												 +weight*A1D_ELEM(psd_exp_radial,lowerIdx+1);
+		}
+		//std::cout << "radial2 =" << psd_exp_radial2 << std::endl;
+		//exit(1);
+		FourierTransformer FourierPSD;
+		FourierPSD.FourierTransform(psd_exp_radial2, psd_fft, false);
+		int index = 0;
+		FOR_ALL_ELEMENTS_IN_ARRAY1D(psd_fft)
+		{
+			amplitud.push_back(sqrt(std::real(psd_fft[i])*std::real(psd_fft[i])+std::imag(psd_fft[i])*std::imag(psd_fft[i])));
+		}
+		for(size_t i=0;i<amplitud.size();i++)
+		{
+			double change = amplitud[i+1]-amplitud[i];
+			if(change > 0.0)
 			{
-
-					if (defocus > 30e3)
-					{
-						error(i) = heavy_penalization;
-						continue;
-					}
-
-						int iter;
-
-						(*adjust_params)(0) = defocus;
-						(*adjust_params)(2) = K_so_far;
-
-						powellOptimizer(*adjust_params, FIRST_DEFOCUS_PARAMETER + 1,
-										DEFOCUS_PARAMETERS, CTF_fitness_fast, global_prm, 0.05,
-										fitness, iter, steps, false);
-
-						if (current_ctfmodel.Defocus >= min_allowed_defocus
-								&& current_ctfmodel.Defocus
-								<= max_allowed_defocus)
-						{
-							error(i) = fitness;
-							if (error(i) < best_error || first)
-							{
-								best_error = error(i);
-								best_defocus = current_ctfmodel.Defocus;
-								best_K = current_ctfmodel.K;
-								first = false;
-
-							}
-						}
-				}
-			// Compute the range of the errors
-			double errmin = error(0), errmax = error(0);
-			bool aValidErrorHasBeenFound=false;
-			for (int ii = STARTINGY(error); ii <= FINISHINGY(error); ii++)
-			{
-				if (error(ii) != heavy_penalization)
-				{
-					aValidErrorHasBeenFound=true;
-					if (error(ii) < errmin)
-						errmin = error(ii);
-					else if (errmax == heavy_penalization)
-						errmax = error(ii);
-					else if (error(ii) > errmax)
-						errmax = error(ii);
-				}
+				double initialIndex = index;
+				break;
 			}
-			// Find those defoci which are within a 10% of the maximum
-			double best_defocusmin = best_defocus, best_defocusmax = best_defocus;
-			for (defocus = defocus0, i = 0; defocus <= defocusF; defocus +=
-					 defocusStep, i++)
-			{
-					if (fabs((error(i) - errmin) / (errmax - errmin)) <= 0.1)
-					{
-						if (defocus < best_defocusmin)
-							best_defocusmin = defocus;
-						if (defocus > best_defocusmax)
-							best_defocusmax = defocus;
-					}
-			}
-
-			defocusF = std::min(max_allowed_defocus,
-								 best_defocusmax + defocusStep);
-			defocus0 = std::max(min_allowed_defocus,
-								 best_defocusmin - defocusStep);
-
-			i = 0;
+			index++;
 		}
 
-		current_ctfmodel.Defocus = best_defocus;
-		current_ctfmodel.K = best_K;
+		amplitud.erase(amplitud.begin(),amplitud.begin()+index);
+		double maxValue = *max_element(amplitud.rbegin(),amplitud.rend());
+		int finalIndex = 0;
+		for(size_t i=0;i<amplitud.size();i++)
+		{
+			if(maxValue == amplitud[i])
+			{
+				current_ctfmodel.Defocus = (((current_ctfmodel.Tm*current_ctfmodel.Tm)*
+						(finalIndex+index+XSIZE(w_digfreq)/2))/
+						(XSIZE(w_digfreq)*2*PI*current_ctfmodel.lambda))*1000;
+				break;
+			}
+			finalIndex++;
+		}
+		std::cout << finalIndex << " " << index << std::endl;
+		std::cout << finalIndex+index+XSIZE(w_digfreq)/2 << std::endl;
+		std::cout << current_ctfmodel.Defocus << std::endl;
 
 	}
 		// Keep the result in adjust
