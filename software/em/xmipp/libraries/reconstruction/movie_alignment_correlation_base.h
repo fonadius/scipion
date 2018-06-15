@@ -98,8 +98,8 @@ private:
 			const Image<double>& dark, const Image<double>& gain,
 			Image<double>& initialMic, size_t& Ninitial,
 			Image<double>& averageMicrograph, size_t& N);
-	void storeResults(Image<double> initialMic, size_t Ninitial,
-			Image<double> averageMicrograph, size_t N, const MetaData& movie,
+	void storeResults(Image<double>& initialMic, size_t Ninitial,
+			Image<double>& averageMicrograph, size_t N, const MetaData& movie,
 			int bestIref);
 	void correctLoopIndices(const MetaData& movie);
 

@@ -465,9 +465,8 @@ void AProgMovieAlignmentCorrelation::applyShiftsComputeAverage(
 		n++;
 	}
 }
-
-void AProgMovieAlignmentCorrelation::storeResults(Image<double> initialMic,
-		size_t Ninitial, Image<double> averageMicrograph, size_t N,
+void AProgMovieAlignmentCorrelation::storeResults(Image<double>& initialMic,
+		size_t Ninitial, Image<double>& averageMicrograph, size_t N,
 		const MetaData& movie, int bestIref) {
 	if (fnInitialAvg != "") {
 		initialMic() /= Ninitial;
