@@ -38,6 +38,11 @@
 /** Movie alignment correlation Parameters. */
 class AProgMovieAlignmentCorrelation: public XmippProgram
 {
+
+#define OUTSIDE_WRAP 0
+#define OUTSIDE_AVG 1
+#define OUTSIDE_VALUE 2
+
 public:
     /// Read argument from command line
     void readParams();
@@ -74,6 +79,10 @@ private:
 
     virtual void computeShifts(size_t N, const Matrix1D<double>& bX,
     			const Matrix1D<double>& bY, const Matrix2D<double>& A) = 0;
+	virtual void applyShiftsComputeAverage(const MetaData& movie,
+			const Image<double>& dark, const Image<double>& gain,
+			Image<double>& initialMic, size_t& Ninitial,
+			Image<double>& averageMicrograph, size_t& N) = 0;
 
 private:
 	int findReferenceImage(size_t N, const Matrix1D<double>& shiftX,
@@ -94,10 +103,6 @@ private:
 	void setZeroShift(MetaData& movie);
 	int findShiftsAndStore(MetaData& movie, Image<double>& dark,
 			Image<double>& gain);
-	void applyShiftsComputeAverage(const MetaData& movie,
-			const Image<double>& dark, const Image<double>& gain,
-			Image<double>& initialMic, size_t& Ninitial,
-			Image<double>& averageMicrograph, size_t& N);
 	void storeResults(Image<double>& initialMic, size_t Ninitial,
 			Image<double>& averageMicrograph, size_t N, const MetaData& movie,
 			int bestIref);
@@ -121,6 +126,22 @@ protected:
 	int xDRcorner;
 	/** y right down corner **/
 	int yDRcorner;
+	/** Aligned movie */
+	FileName fnAligned;
+	/** Aligned micrograph */
+	FileName fnAvg;
+	/** First and last frame*/
+	int nfirstSum, nlastSum;
+	/** Aligned micrograph */
+	FileName fnInitialAvg;
+	/** Binning factor */
+	double bin;
+	/** Bspline order */
+	int BsplineOrder;
+	/** Outside mode */
+	int outsideMode;
+	/** Outside value */
+	double outsideValue;
 
 private:
 	// Target sampling rate
@@ -135,26 +156,10 @@ private:
 	double maxFreq;
 	/** Solver iterations */
 	int solverIterations;
-	/** Aligned movie */
-	FileName fnAligned;
-	/** Aligned micrograph */
-	FileName fnAvg;
-	/** Aligned micrograph */
-	FileName fnInitialAvg;
 	/** Metadata with shifts */
 	FileName fnOut;
-	/** First and last frame*/
-	int nfirstSum, nlastSum;
 	/** Do not calculate and use the input shifts */
 	bool useInputShifts;
-	/** Binning factor */
-	double bin;
-	/** Bspline order */
-	int BsplineOrder;
-	/** Outside mode */
-	int outsideMode;
-	/** Outside value */
-	double outsideValue;
 
 };
 //@}

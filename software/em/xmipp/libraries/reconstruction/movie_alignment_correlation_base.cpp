@@ -26,10 +26,6 @@
 
 #include "reconstruction/movie_alignment_correlation_base.h"
 
-#define OUTSIDE_WRAP 0
-#define OUTSIDE_AVG 1
-#define OUTSIDE_VALUE 2
-
 // Read arguments ==========================================================
 void AProgMovieAlignmentCorrelation::readParams()
 {
@@ -392,79 +388,6 @@ int AProgMovieAlignmentCorrelation::findShiftsAndStore(
 	return bestIref;
 }
 
-void AProgMovieAlignmentCorrelation::applyShiftsComputeAverage(
-		const MetaData& movie, const Image<double>& dark,
-		const Image<double>& gain, Image<double>& initialMic,
-		size_t& Ninitial, Image<double>& averageMicrograph, size_t& N) {
-	// Apply shifts and compute average
-	Image<double> frame, croppedFrame, reducedFrame, shiftedFrame;
-	Matrix1D<double> shift(2);
-	FileName fnFrame;
-	int j = 0;
-	int n = 0;
-	Ninitial = N = 0;
-	FOR_ALL_OBJECTS_IN_METADATA(movie)
-	{
-		if (n >= nfirstSum && n <= nlastSum) {
-			movie.getValue(MDL_IMAGE, fnFrame, __iter.objId);
-			movie.getValue(MDL_SHIFT_X, XX(shift), __iter.objId);
-			movie.getValue(MDL_SHIFT_Y, YY(shift), __iter.objId);
-			std::cout << fnFrame << " shiftX=" << XX(shift) << " shiftY="
-					<< YY(shift) << std::endl;
-
-			frame.read(fnFrame);
-			if (XSIZE(dark()) > 0)
-				frame() -= dark();
-			if (XSIZE(gain()) > 0)
-				frame() *= gain();
-			if (yDRcorner != -1)
-				frame().window(croppedFrame(), yLTcorner, xLTcorner, yDRcorner,
-						xDRcorner);
-			else
-				croppedFrame() = frame();
-			if (bin > 0) {
-				scaleToSizeFourier(1, floor(YSIZE(croppedFrame()) / bin),
-						floor(XSIZE(croppedFrame()) / bin), croppedFrame(),
-						reducedFrame());
-				shift /= bin;
-				croppedFrame() = reducedFrame(); // FIXME what is this supposed to do?
-			}
-
-			if (fnInitialAvg != "") {
-				if (j == 0)
-					initialMic() = croppedFrame();
-				else
-					initialMic() += croppedFrame();
-				Ninitial++;
-			}
-
-			if (fnAligned != "" || fnAvg != "") {
-				if (outsideMode == OUTSIDE_WRAP)
-					translate(BsplineOrder, shiftedFrame(), croppedFrame(),
-							shift, WRAP);
-				else if (outsideMode == OUTSIDE_VALUE)
-					translate(BsplineOrder, shiftedFrame(), croppedFrame(),
-							shift, DONT_WRAP, outsideValue);
-				else
-					translate(BsplineOrder, shiftedFrame(), croppedFrame(),
-							shift, DONT_WRAP, croppedFrame().computeAvg());
-				if (fnAligned != "")
-					shiftedFrame.write(fnAligned, j + 1, true, WRITE_REPLACE);
-				if (fnAvg != "") {
-					if (j == 0)
-						averageMicrograph() = shiftedFrame();
-					else
-						averageMicrograph() += shiftedFrame();
-					N++;
-				}
-			}
-//			return;
-
-			j++;
-		}
-		n++;
-	}
-}
 void AProgMovieAlignmentCorrelation::storeResults(Image<double>& initialMic,
 		size_t Ninitial, Image<double>& averageMicrograph, size_t N,
 		const MetaData& movie, int bestIref) {

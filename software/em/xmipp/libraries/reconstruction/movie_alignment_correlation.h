@@ -47,6 +47,11 @@ private:
 
 	void computeShifts(size_t N, const Matrix1D<double>& bX,
 			const Matrix1D<double>& bY, const Matrix2D<double>& A);
+
+	void applyShiftsComputeAverage(
+			const MetaData& movie, const Image<double>& dark,
+			const Image<double>& gain, Image<double>& initialMic,
+			size_t& Ninitial, Image<double>& averageMicrograph, size_t& N);
 };
 
 #endif

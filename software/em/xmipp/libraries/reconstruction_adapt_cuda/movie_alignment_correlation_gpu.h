@@ -50,6 +50,11 @@ private:
 	float* loadToRAM(const MetaData& movie, int noOfImgs,
 			const Image<double>& dark, const Image<double>& gain, bool cropInput);
 
+	void applyShiftsComputeAverage(
+				const MetaData& movie, const Image<double>& dark,
+				const Image<double>& gain, Image<double>& initialMic,
+				size_t& Ninitial, Image<double>& averageMicrograph, size_t& N);
+
 private:
 	void loadFrame(const MetaData& movie, size_t objId, bool crop, Image<float>& out);
 	void setSizes(Image<float> frame, int noOfImgs);

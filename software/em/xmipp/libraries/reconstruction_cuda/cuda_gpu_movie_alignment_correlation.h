@@ -2,6 +2,17 @@
 #include "utils.h"
 #include <vector>
 #include "reconstruction_cuda/cuda_xmipp_utils.h"
+#include "data/multidim_array.h"
+#include "data/transformations.h"
+
+
+template<typename T1,typename T>
+void applyGeometryGPU(int SplineDegree,
+                   MultidimArray<T>& __restrict__ V2,
+                   const MultidimArray<T1>& __restrict__ V1,
+                   const Matrix2D< double > &A, bool inv,
+                   bool wrap, T outside = 0, MultidimArray<double> *BcoeffsPtr=NULL);
+
 
 float* loadToGPU(float* data, size_t items);
 
