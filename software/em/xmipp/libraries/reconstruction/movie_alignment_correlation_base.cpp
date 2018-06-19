@@ -26,8 +26,23 @@
 
 #include "reconstruction/movie_alignment_correlation_base.h"
 
+template<typename T>
+void AProgMovieAlignmentCorrelation<T>::scaleLPF(const MultidimArray<T>& lpf, int xSize, int ySize, T targetOccupancy, MultidimArray<T>& result) {
+	Matrix1D<T> w(2);
+	FOR_ALL_DIRECT_ELEMENTS_IN_ARRAY2D(result)
+	{
+		FFT_idx2digFreq(i, ySize, YY(w));
+		FFT_idx2digFreq(j, xSize, XX(w));
+		T wabs = w.module();
+		if (wabs <= targetOccupancy)
+			A2D_ELEM(result,i,j) = lpf.interpolatedElement1D(
+					wabs * xSize);
+	}
+}
+
 // Read arguments ==========================================================
-void AProgMovieAlignmentCorrelation::readParams()
+template<typename T>
+void AProgMovieAlignmentCorrelation<T>::readParams()
 {
     fnMovie = getParam("-i");
     fnOut = getParam("-o");
@@ -66,7 +81,8 @@ void AProgMovieAlignmentCorrelation::readParams()
 }
 
 // Show ====================================================================
-void AProgMovieAlignmentCorrelation::show()
+template<typename T>
+void AProgMovieAlignmentCorrelation<T>::show()
 {
     if (!verbose)
         return;
@@ -93,7 +109,8 @@ void AProgMovieAlignmentCorrelation::show()
 }
 
 // usage ===================================================================
-void AProgMovieAlignmentCorrelation::defineParams()
+template<typename T>
+void AProgMovieAlignmentCorrelation<T>::defineParams()
 {
     addUsageLine("Align a set of frames by cross-correlation of the frames");
     addParamsLine("   -i <metadata>               : Metadata with the list of frames to align");
@@ -129,8 +146,9 @@ void AProgMovieAlignmentCorrelation::defineParams()
     addSeeAlsoLine("xmipp_movie_optical_alignment_cpu");
 }
 
-void computeTotalShift(int iref, int j, const Matrix1D<double> &shiftX, const Matrix1D<double> &shiftY,
-                       double &totalShiftX, double &totalShiftY)
+template<typename T>
+void AProgMovieAlignmentCorrelation<T>::computeTotalShift(int iref, int j, const Matrix1D<T> &shiftX, const Matrix1D<T> &shiftY,
+                       T &totalShiftX, T &totalShiftY)
 {
     totalShiftX=totalShiftY=0;
     if (iref<j)
@@ -151,15 +169,16 @@ void computeTotalShift(int iref, int j, const Matrix1D<double> &shiftX, const Ma
     }
 }
 
-int AProgMovieAlignmentCorrelation::findReferenceImage(size_t N,
-		const Matrix1D<double>& shiftX, const Matrix1D<double>& shiftY) {
+template<typename T>
+int AProgMovieAlignmentCorrelation<T>::findReferenceImage(size_t N,
+		const Matrix1D<T>& shiftX, const Matrix1D<T>& shiftY) {
 	int bestIref = -1;
 	// Choose reference image as the minimax of shifts
-	double worstShiftEver = 1e38;
+	T worstShiftEver = FLT_MAX; // FIXME use proper value
 	for (int iref = 0; iref < N; ++iref) {
-		double worstShift = -1;
+		T worstShift = -1;
 		for (int j = 0; j < N; ++j) {
-			double totalShiftX, totalShiftY;
+			T totalShiftX, totalShiftY;
 			computeTotalShift(iref, j, shiftX, shiftY, totalShiftX,
 					totalShiftY);
 			if (fabs(totalShiftX) > worstShift)
@@ -176,69 +195,83 @@ int AProgMovieAlignmentCorrelation::findReferenceImage(size_t N,
 	return bestIref;
 }
 
-void AProgMovieAlignmentCorrelation::solveEquationSystem(Matrix1D<double>& bX,
-		Matrix1D<double>& bY, Matrix2D<double>& A, Matrix1D<double>& shiftX,
-		Matrix1D<double>& shiftY) {
-	// Finally solve the equation system
+template<typename T>
+void AProgMovieAlignmentCorrelation<T>::solveEquationSystem(Matrix1D<T>& bXt,
+		Matrix1D<T>& bYt, Matrix2D<T>& At, Matrix1D<T>& shiftXt,
+		Matrix1D<T>& shiftYt) {
+ 	// Finally solve the equation system
 	Matrix1D<double> ex, ey;
-	WeightedLeastSquaresHelper helper;
-	helper.A=A;
-	helper.w.initZeros(VEC_XSIZE(bX));
-	helper.w.initConstant(1);
+ 	WeightedLeastSquaresHelper helper;
+ 	// FIXME implement properly. WeightedLeastSquaresHelper needs to be probably changed too
+	Matrix2D<double> A;
+	Matrix1D<double> bX, bY, shiftX, shiftY;
+ 	typeCast(At, helper.A);
+ 	typeCast(bXt, bX);
+ 	typeCast(bYt, bY);
+ 	typeCast(shiftXt, shiftX);
+ 	typeCast(shiftYt, shiftY);
 
-	int it=0;
+//	helper.A=A;
+ 	helper.w.initZeros(VEC_XSIZE(bX));
+ 	helper.w.initConstant(1);
+
+ 	int it=0;
 	double mean, varbX, varbY;
-	bX.computeMeanAndStddev(mean,varbX);
-	varbX*=varbX;
-	bY.computeMeanAndStddev(mean,varbY);
-	varbY*=varbY;
-	if (verbose)
-		std::cout << "\nSolving for the shifts ...\n";
-	do
-	{
-		// Solve the equation system
-		helper.b=bX;
+ 	bX.computeMeanAndStddev(mean,varbX);
+ 	varbX*=varbX;
+ 	bY.computeMeanAndStddev(mean,varbY);
+ 	varbY*=varbY;
+ 	if (verbose)
+ 		std::cout << "\nSolving for the shifts ...\n";
+ 	do
+ 	{
+ 		// Solve the equation system
+ 		helper.b=bX;
 		weightedLeastSquares(helper,shiftX);
-		helper.b=bY;
+ 		helper.b=bY;
 		weightedLeastSquares(helper,shiftY);
 
-		// Compute residuals
-		ex=bX-A*shiftX;
-		ey=bY-A*shiftY;
+ 		// Compute residuals
+		ex=bX-helper.A*shiftX;
+		ey=bY-helper.A*shiftY;
 
-		// Compute R2
+ 		// Compute R2
 		double mean, vareX, vareY;
-		ex.computeMeanAndStddev(mean,vareX);
-		vareX*=vareX;
-		ey.computeMeanAndStddev(mean,vareY);
-		vareY*=vareY;
+ 		ex.computeMeanAndStddev(mean,vareX);
+ 		vareX*=vareX;
+ 		ey.computeMeanAndStddev(mean,vareY);
+ 		vareY*=vareY;
 		double R2x=1-vareX/varbX;
 		double R2y=1-vareY/varbY;
-		if (verbose)
-			std::cout << "Iteration " << it << " R2x=" << R2x << " R2y=" << R2y << std::endl;
+ 		if (verbose)
+ 			std::cout << "Iteration " << it << " R2x=" << R2x << " R2y=" << R2y << std::endl;
 
-		// Identify outliers
+ 		// Identify outliers
 		double oldWeightSum=helper.w.sum();
 		double stddeveX=sqrt(vareX);
 		double stddeveY=sqrt(vareY);
-		FOR_ALL_ELEMENTS_IN_MATRIX1D(ex)
-		if (fabs(VEC_ELEM(ex,i))>3*stddeveX || fabs(VEC_ELEM(ey,i))>3*stddeveY)
-			VEC_ELEM(helper.w,i)=0.0;
+ 		FOR_ALL_ELEMENTS_IN_MATRIX1D(ex)
+ 		if (fabs(VEC_ELEM(ex,i))>3*stddeveX || fabs(VEC_ELEM(ey,i))>3*stddeveY)
+ 			VEC_ELEM(helper.w,i)=0.0;
 		double newWeightSum=helper.w.sum();
-		if (newWeightSum==oldWeightSum)
-		{
-			std::cout << "No outlier found\n";
-			break;
-		}
+ 		if (newWeightSum==oldWeightSum)
+ 		{
+ 			std::cout << "No outlier found\n";
+ 			break;
+ 		}
 		else
 			std::cout << "Found " << (int)(oldWeightSum-newWeightSum) << " outliers\n";
 
 		it++;
 	}
 	while (it<solverIterations);
+
+ 	typeCast(shiftX, shiftXt);
+ 	typeCast(shiftY, shiftYt);
 }
 
-void AProgMovieAlignmentCorrelation::loadDarkCorrection(Image<double>& dark) {
+template<typename T>
+void AProgMovieAlignmentCorrelation<T>::loadDarkCorrection(Image<T>& dark) {
 	if (fnDark.isEmpty()) return;
 	// load dark correction image
 	dark.read(fnDark);
@@ -246,33 +279,36 @@ void AProgMovieAlignmentCorrelation::loadDarkCorrection(Image<double>& dark) {
 		dark().selfWindow(yLTcorner, xLTcorner, yDRcorner, xDRcorner);
 }
 
-void AProgMovieAlignmentCorrelation::loadGainCorrection(Image<double>& gain) {
+template<typename T>
+void AProgMovieAlignmentCorrelation<T>::loadGainCorrection(Image<T>& gain) {
 	if (fnGain.isEmpty()) return;
 	// load gain correction image
 	gain.read(fnGain);
 	if (yDRcorner != -1)
 		gain().selfWindow(yLTcorner, xLTcorner, yDRcorner, xDRcorner);
 	gain() = 1.0 / gain();
-	double avg = gain().computeAvg();
+	T avg = gain().computeAvg();
 	if (isinf(avg) || isnan(avg))
 		REPORT_ERROR(ERR_ARG_INCORRECT,
 				"The input gain image is incorrect, its inverse produces infinite or nan");
 }
 
-void AProgMovieAlignmentCorrelation::constructLPF(double targetOccupancy,
-		const MultidimArray<double>& lpf) {
-	double iNewXdim = 1.0 / newXdim;
-	double sigma = targetOccupancy / 6; // So that from -targetOccupancy to targetOccupancy there is 6 sigma
-	double K = -0.5 / (sigma * sigma);
+template<typename T>
+void AProgMovieAlignmentCorrelation<T>::constructLPF(T targetOccupancy,
+		const MultidimArray<T>& lpf) {
+	T iNewXdim = 1.0 / newXdim;
+	T sigma = targetOccupancy / 6; // So that from -targetOccupancy to targetOccupancy there is 6 sigma
+	T K = -0.5 / (sigma * sigma);
 	FOR_ALL_ELEMENTS_IN_ARRAY1D(lpf)
 	{
-		double w = i * iNewXdim;
+		T w = i * iNewXdim;
 		A1D_ELEM(lpf,i) = exp(K * (w * w));
 	}
 }
 
-void AProgMovieAlignmentCorrelation::setNewDimensions(double& targetOccupancy,
-		const MetaData& movie, double& sizeFactor) {
+template<typename T>
+void AProgMovieAlignmentCorrelation<T>::setNewDimensions(T& targetOccupancy,
+		const MetaData& movie, T& sizeFactor) {
 	if (bin < 0) {
 		targetOccupancy = 0.9; // Set to 1 if you want fmax maps onto 1/(2*newTs)
 		// Determine target size of the images
@@ -301,7 +337,8 @@ void AProgMovieAlignmentCorrelation::setNewDimensions(double& targetOccupancy,
 	newYdim = int(Ydim * sizeFactor);
 }
 
-void AProgMovieAlignmentCorrelation::readMovie(MetaData& movie) {
+template<typename T>
+void AProgMovieAlignmentCorrelation<T>::readMovie(MetaData& movie) {
 	//if input is an stack create a metadata.
 	if (fnMovie.isMetaData())
 		movie.read(fnMovie);
@@ -322,12 +359,13 @@ void AProgMovieAlignmentCorrelation::readMovie(MetaData& movie) {
 	}
 }
 
-void AProgMovieAlignmentCorrelation::storeRelativeShifts(int bestIref,
-		const Matrix1D<double>& shiftX, const Matrix1D<double>& shiftY,
-		double sizeFactor, MetaData& movie) {
+template<typename T>
+void AProgMovieAlignmentCorrelation<T>::storeRelativeShifts(int bestIref,
+		const Matrix1D<T>& shiftX, const Matrix1D<T>& shiftY,
+		T sizeFactor, MetaData& movie) {
 	int j = 0;
 	int n = 0;
-	Matrix1D<double> shift(2);
+	Matrix1D<T> shift(2);
 	FOR_ALL_OBJECTS_IN_METADATA(movie)
 	{
 		if (n >= nfirst && n <= nlast) {
@@ -335,8 +373,8 @@ void AProgMovieAlignmentCorrelation::storeRelativeShifts(int bestIref,
 					YY(shift));
 			shift /= sizeFactor;
 			shift *= -1;
-			movie.setValue(MDL_SHIFT_X, XX(shift), __iter.objId);
-			movie.setValue(MDL_SHIFT_Y, YY(shift), __iter.objId);
+			movie.setValue(MDL_SHIFT_X, (double)XX(shift), __iter.objId);
+			movie.setValue(MDL_SHIFT_Y, (double)YY(shift), __iter.objId);
 			j++;
 			movie.setValue(MDL_ENABLED, 1, __iter.objId);
 		} else {
@@ -349,7 +387,8 @@ void AProgMovieAlignmentCorrelation::storeRelativeShifts(int bestIref,
 	}
 }
 
-void AProgMovieAlignmentCorrelation::setZeroShift(MetaData& movie) {
+template<typename T>
+void AProgMovieAlignmentCorrelation<T>::setZeroShift(MetaData& movie) {
 	// assuming movie does not contain MDL_SHIFT_X label
 	movie.addLabel(MDL_SHIFT_X);
 	movie.addLabel(MDL_SHIFT_Y);
@@ -357,19 +396,20 @@ void AProgMovieAlignmentCorrelation::setZeroShift(MetaData& movie) {
 	movie.fillConstant(MDL_SHIFT_Y, "0.0");
 }
 
-int AProgMovieAlignmentCorrelation::findShiftsAndStore(
-		MetaData& movie, Image<double>& dark, Image<double>& gain) {
-	double sizeFactor = 1.0;
-	double targetOccupancy = 1.0; // Set to 1 if you want fmax maps onto 1/(2*newTs)
+template<typename T>
+int AProgMovieAlignmentCorrelation<T>::findShiftsAndStore(
+		MetaData& movie, Image<T>& dark, Image<T>& gain) {
+	T sizeFactor = 1.0;
+	T targetOccupancy = 1.0; // Set to 1 if you want fmax maps onto 1/(2*newTs)
 
 	setNewDimensions(targetOccupancy, movie, sizeFactor);
 	// Construct 1D profile of the lowpass filter
-	MultidimArray<double> lpf(newXdim / 2);
+	MultidimArray<T> lpf(newXdim / 2);
 	constructLPF(targetOccupancy, lpf);
 
 	size_t N = nlast - nfirst + 1; // no of images to process
-	Matrix2D<double> A(N * (N - 1) / 2, N - 1);
-	Matrix1D<double> bX(N * (N - 1) / 2), bY(N * (N - 1) / 2);
+	Matrix2D<T> A(N * (N - 1) / 2, N - 1);
+	Matrix1D<T> bX(N * (N - 1) / 2), bY(N * (N - 1) / 2);
 	if (verbose)
 		std::cout << "Loading frames ..." << std::endl;
 	// Compute the Fourier transform of all input images
@@ -379,7 +419,7 @@ int AProgMovieAlignmentCorrelation::findShiftsAndStore(
 	// Now compute all shifts
 	computeShifts(N, bX, bY, A);
 
-	Matrix1D<double> shiftX, shiftY;
+	Matrix1D<T> shiftX, shiftY;
 	solveEquationSystem(bX, bY, A, shiftX, shiftY);
 
 	// Choose reference image as the minimax of shifts
@@ -388,8 +428,9 @@ int AProgMovieAlignmentCorrelation::findShiftsAndStore(
 	return bestIref;
 }
 
-void AProgMovieAlignmentCorrelation::storeResults(Image<double>& initialMic,
-		size_t Ninitial, Image<double>& averageMicrograph, size_t N,
+template<typename T>
+void AProgMovieAlignmentCorrelation<T>::storeResults(Image<T>& initialMic,
+		size_t Ninitial, Image<T>& averageMicrograph, size_t N,
 		const MetaData& movie, int bestIref) {
 	if (fnInitialAvg != "") {
 		initialMic() /= Ninitial;
@@ -407,7 +448,8 @@ void AProgMovieAlignmentCorrelation::storeResults(Image<double>& initialMic,
 	}
 }
 
-void AProgMovieAlignmentCorrelation::correctLoopIndices(const MetaData& movie) {
+template<typename T>
+void AProgMovieAlignmentCorrelation<T>::correctLoopIndices(const MetaData& movie) {
 	nfirst = std::max(nfirst, 0);
 	nfirstSum = std::max(nfirstSum, 0);
 	if (nlast < 0)
@@ -417,7 +459,8 @@ void AProgMovieAlignmentCorrelation::correctLoopIndices(const MetaData& movie) {
 		nlastSum = movie.size();
 }
 
-void AProgMovieAlignmentCorrelation::run()
+template<typename T>
+void AProgMovieAlignmentCorrelation<T>::run()
 {
 	clock_t begin = clock();
     // preprocess input data
@@ -427,7 +470,7 @@ void AProgMovieAlignmentCorrelation::run()
 	printf("read move, correctLoopIndices took %f\n", ((float)clock()-begin)/CLOCKS_PER_SEC);
 
 	begin = clock();
-	Image<double> dark, gain;
+	Image<T> dark, gain;
 	loadDarkCorrection(dark);
 	loadGainCorrection(gain);
 	printf("loadCorrections took %f\n", ((float)clock()-begin)/CLOCKS_PER_SEC);
@@ -448,7 +491,7 @@ void AProgMovieAlignmentCorrelation::run()
 
     begin = clock();
 	size_t N, Ninitial;
-	Image<double> initialMic, averageMicrograph;
+	Image<T> initialMic, averageMicrograph;
     // Apply shifts and compute average
 	applyShiftsComputeAverage(movie, dark, gain, initialMic, Ninitial,
 			averageMicrograph, N);
@@ -456,3 +499,6 @@ void AProgMovieAlignmentCorrelation::run()
 	storeResults(initialMic, Ninitial, averageMicrograph, N, movie, bestIref);
 	printf("applying shift and storing took %f\n", ((float)clock()-begin)/CLOCKS_PER_SEC);
 }
+
+template class AProgMovieAlignmentCorrelation<float>;
+template class AProgMovieAlignmentCorrelation<double>;

@@ -85,46 +85,60 @@ int findNext2357Multiple(int num) {
 	return 0;
 }
 
-
-void __attribute__((optimize("O0"))) ProgMovieAlignmentCorrelationGPU::applyShiftsComputeAverage(
-		const MetaData& movie, const Image<double>& dark,
-		const Image<double>& gain, Image<double>& initialMic,
-		size_t& Ninitial, Image<double>& averageMicrograph, size_t& N) {
+template<typename T>
+void __attribute__((optimize("O0"))) ProgMovieAlignmentCorrelationGPU<T>::applyShiftsComputeAverage(
+		const MetaData& movie, const Image<T>& dark,
+		const Image<T>& gain, Image<T>& initialMic,
+		size_t& Ninitial, Image<T>& averageMicrograph, size_t& N) {
 	// Apply shifts and compute average
-	Image<double> frame, croppedFrame, reducedFrame, shiftedFrame;
-	Matrix1D<double> shift(2);
+	Image<T> frame, croppedFrame, reducedFrame, shiftedFrame;
+	Matrix1D<double> shiftDouble(2);
+	Matrix1D<T> shift(2);
 	FileName fnFrame;
 	int j = 0;
 	int n = 0;
 	Ninitial = N = 0;
 	FOR_ALL_OBJECTS_IN_METADATA(movie)
 	{
-		if (n >= nfirstSum && n <= nlastSum) {
+		if (n >= this->nfirstSum && n <= this->nlastSum) {
 			movie.getValue(MDL_IMAGE, fnFrame, __iter.objId);
-			movie.getValue(MDL_SHIFT_X, XX(shift), __iter.objId);
-			movie.getValue(MDL_SHIFT_Y, YY(shift), __iter.objId);
+			movie.getValue(MDL_SHIFT_X, XX(shiftDouble), __iter.objId);
+			movie.getValue(MDL_SHIFT_Y, YY(shiftDouble), __iter.objId);
+
+			typeCast(shiftDouble, shift); // FIXME
+
 			std::cout << fnFrame << " shiftX=" << XX(shift) << " shiftY="
 					<< YY(shift) << std::endl;
+			std::cout << fnFrame << " shiftX=" << XX(shiftDouble) << " shiftY="
+					<< YY(shiftDouble) << std::endl;
 			clock_t begin = clock();
 			frame.read(fnFrame);
 			if (XSIZE(dark()) > 0)
 				frame() -= dark();
 			if (XSIZE(gain()) > 0)
 				frame() *= gain();
-			if (yDRcorner != -1)
-				frame().window(croppedFrame(), yLTcorner, xLTcorner, yDRcorner,
-						xDRcorner);
+			if (this->yDRcorner != -1)
+				frame().window(croppedFrame(), this->yLTcorner, this->xLTcorner, this->yDRcorner,
+						this->xDRcorner);
 			else
 				croppedFrame() = frame();
-			if (bin > 0) {
-				scaleToSizeFourier(1, floor(YSIZE(croppedFrame()) / bin),
-						floor(XSIZE(croppedFrame()) / bin), croppedFrame(),
-						reducedFrame());
-				shift /= bin;
+			if (this->bin > 0) {
+				// FIXME add templates to respective functions/classes to avoid type casting
+				Image<double>croppedFrameDouble;
+				Image<double>reducedFrameDouble;
+				typeCast(croppedFrame(), croppedFrameDouble());
+
+				scaleToSizeFourier(1, floor(YSIZE(croppedFrame()) / this->bin),
+						floor(XSIZE(croppedFrame()) / this->bin), croppedFrameDouble(),
+						reducedFrameDouble());
+
+				typeCast(reducedFrameDouble(), reducedFrame());
+
+				shift /= this->bin;
 				croppedFrame() = reducedFrame(); // FIXME what is this supposed to do?
 			}
 
-			if (fnInitialAvg != "") {
+			if (this->fnInitialAvg != "") {
 				if (j == 0)
 					initialMic() = croppedFrame();
 				else
@@ -132,11 +146,11 @@ void __attribute__((optimize("O0"))) ProgMovieAlignmentCorrelationGPU::applyShif
 				Ninitial++;
 			}
 
-			if (fnAligned != "" || fnAvg != "") {
-				if (outsideMode == OUTSIDE_WRAP) {
+			if (this->fnAligned != "" || this->fnAvg != "") {
+				if (this->outsideMode == OUTSIDE_WRAP) {
 	//					translate(BsplineOrder, shiftedFrame(), croppedFrame(),
 	//							shift, WRAP);
-					Matrix2D<double> tmp;
+					Matrix2D<float> tmp;
 //
 //					XX(shift) = 0.1;
 //					YY(shift) = 0.2;
@@ -150,22 +164,22 @@ void __attribute__((optimize("O0"))) ProgMovieAlignmentCorrelationGPU::applyShif
 //					applyGeometryGPU(BsplineOrder, shiftedFrame(), croppedFrame(), tmp, IS_INV, WRAP, 0.);
 //
 
-					translation2DMatrix(shift, tmp,true);
+					translation2DMatrix(shift, tmp, true);
 					printf("pred applyGeomtery %f\n", ((float)clock()-begin)/CLOCKS_PER_SEC);
 					begin = clock();
-					applyGeometryGPU(BsplineOrder, shiftedFrame(), croppedFrame(), tmp, IS_INV, WRAP, 0.);
+					applyGeometry(this->BsplineOrder, shiftedFrame(), croppedFrame(), tmp, IS_INV, WRAP);
 					printf("applyGeomtery %f\n", ((float)clock()-begin)/CLOCKS_PER_SEC);
 					begin = clock();
 				}
-				else if (outsideMode == OUTSIDE_VALUE)
-					translate(BsplineOrder, shiftedFrame(), croppedFrame(),
-							shift, DONT_WRAP, outsideValue);
+				else if (this->outsideMode == OUTSIDE_VALUE)
+					translate(this->BsplineOrder, shiftedFrame(), croppedFrame(),
+							shift, DONT_WRAP, this->outsideValue);
 				else
-					translate(BsplineOrder, shiftedFrame(), croppedFrame(),
-							shift, DONT_WRAP, croppedFrame().computeAvg());
-				if (fnAligned != "")
-					shiftedFrame.write(fnAligned, j + 1, true, WRITE_REPLACE);
-				if (fnAvg != "") {
+					translate(this->BsplineOrder, shiftedFrame(), croppedFrame(),
+							shift, DONT_WRAP, (T)croppedFrame().computeAvg());
+				if (this->fnAligned != "")
+					shiftedFrame.write(this->fnAligned, j + 1, true, WRITE_REPLACE);
+				if (this->fnAvg != "") {
 					if (j == 0)
 						averageMicrograph() = shiftedFrame();
 					else
@@ -181,15 +195,15 @@ void __attribute__((optimize("O0"))) ProgMovieAlignmentCorrelationGPU::applyShif
 }
 
 
-// FIXME
-
-void ProgMovieAlignmentCorrelationGPU::loadFrame(const MetaData& movie, size_t objId, bool crop, Image<float>& out) {
+// FIXME move to parent, use in store function?
+template<typename T>
+void ProgMovieAlignmentCorrelationGPU<T>::loadFrame(const MetaData& movie, size_t objId, bool crop, Image<T>& out) {
 	FileName fnFrame;
 	movie.getValue(MDL_IMAGE, fnFrame, objId);
 	if (crop) {
 		Image<double>tmp;
 		tmp.read(fnFrame);
-		tmp().window(out(), yLTcorner, xLTcorner, yDRcorner, xDRcorner);
+		tmp().window(out(), this->yLTcorner, this->xLTcorner, this->yDRcorner, this->xDRcorner);
 	} else {
 		out.read(fnFrame);
 	}
@@ -205,8 +219,9 @@ int getMaxFilterSize(Image<float>& frame) { // FIXME put to header
 	return bytes / (1024*1024);
 }
 
-float* ProgMovieAlignmentCorrelationGPU::loadToRAM(const MetaData& movie, int noOfImgs,
-		const Image<double>& dark, const Image<double>& gain, bool cropInput) {
+template<typename T>
+float* ProgMovieAlignmentCorrelationGPU<T>::loadToRAM(const MetaData& movie, int noOfImgs,
+		const Image<T>& dark, const Image<T>& gain, bool cropInput) {
 	float* imgs = new float[noOfImgs * inputOptSizeX * inputOptSizeY]();
 	Image<float> frame, gainF, darkF;
 	// copy image correction data, convert to float
@@ -217,8 +232,8 @@ float* ProgMovieAlignmentCorrelationGPU::loadToRAM(const MetaData& movie, int no
 	FOR_ALL_OBJECTS_IN_METADATA(movie) {
 		// update variables
 		movieImgIndex++;
-		if (movieImgIndex < nfirst ) continue;
-		if (movieImgIndex > nlast) break;
+		if (movieImgIndex < this->nfirst ) continue;
+		if (movieImgIndex > this->nlast) break;
 
 		// load image
 		loadFrame(movie, __iter.objId, cropInput, frame);
@@ -229,7 +244,7 @@ float* ProgMovieAlignmentCorrelationGPU::loadToRAM(const MetaData& movie, int no
 
 		// copy line by line, adding offset at the end of each line
 		// result is the same image, padded in the X and Y dimensions
-		float* dest = imgs + ((movieImgIndex-nfirst) * inputOptSizeX * inputOptSizeY); // points to first float in the image
+		float* dest = imgs + ((movieImgIndex-this->nfirst) * inputOptSizeX * inputOptSizeY); // points to first float in the image
 		for (size_t i = 0; i < frame.data.ydim; ++i) {
 			memcpy(dest + (inputOptSizeX * i),
 					frame.data.data + i*frame.data.xdim,
@@ -244,12 +259,12 @@ float* ProgMovieAlignmentCorrelationGPU::loadToRAM(const MetaData& movie, int no
 	return imgs;
 }
 
-#pragma GCC optimize("O0") // FIXME
-void ProgMovieAlignmentCorrelationGPU::setSizes(Image<float> frame,
+template<typename T>
+void ProgMovieAlignmentCorrelationGPU<T>::setSizes(Image<T> frame,
 		int noOfImgs) {
 	// get best sizes
 	int maxFilterSize = getMaxFilterSize(frame);
-	if (verbose)
+	if (this->verbose)
 		std::cerr << "Benchmarking cuFFT ..." << std::endl;
 
 
@@ -270,7 +285,7 @@ void ProgMovieAlignmentCorrelationGPU::setSizes(Image<float> frame,
 
 
 	printf("benchmarking for %d imgs of %d x %d, %d of Memory (out of %d)\n",
-			noOfCorrelations, newXdim, newYdim, correlationBufferSizeMB * 2, availableMemMB);
+			noOfCorrelations, this->newXdim, this->newYdim, correlationBufferSizeMB * 2, availableMemMB);
 //	getBestSize(noOfCorrelations, newXdim, newYdim, croppedOptBatchSize,
 //			croppedOptSizeX, croppedOptSizeY, correlationBufferSizeMB * 2); // FIXME uncomment
 	croppedOptBatchSize = 15;
@@ -288,12 +303,13 @@ void ProgMovieAlignmentCorrelationGPU::setSizes(Image<float> frame,
 	printf("one correlation %f MB, buffer (%d) will hold %d imgs\n", corrSizeMB, correlationBufferSizeMB, correlationBufferImgs);
 }
 
-void ProgMovieAlignmentCorrelationGPU::loadData(const MetaData& movie,
-		const Image<double>& dark, const Image<double>& gain,
-		double targetOccupancy, const MultidimArray<double>& lpf) {
+template<typename T>
+void ProgMovieAlignmentCorrelationGPU<T>::loadData(const MetaData& movie,
+		const Image<T>& dark, const Image<T>& gain,
+		T targetOccupancy, const MultidimArray<T>& lpf) {
 	// allocate space for data on CPU
-	bool cropInput = (yDRcorner != -1);
-	int noOfImgs = nlast - nfirst + 1;
+	bool cropInput = (this->yDRcorner != -1);
+	int noOfImgs = this->nlast - this->nfirst + 1;
 
 	// get frame info
 	Image<float> frame;
@@ -302,7 +318,7 @@ void ProgMovieAlignmentCorrelationGPU::loadData(const MetaData& movie,
 	// prepare filter
 	MultidimArray<float> filter;
 	filter.initZeros(croppedOptSizeY, croppedOptSizeFFTX);
-	scaleLPF(lpf, croppedOptSizeX, croppedOptSizeY, targetOccupancy, filter);
+	this->scaleLPF(lpf, croppedOptSizeX, croppedOptSizeY, targetOccupancy, filter);
 	float* d_filter = loadToGPU(filter.data, croppedOptSizeFFTX * croppedOptSizeY);
 
 	// load all frames to RAM
@@ -377,16 +393,17 @@ void ProgMovieAlignmentCorrelationGPU::loadData(const MetaData& movie,
 
 }
 
-void ProgMovieAlignmentCorrelationGPU::computeShifts(size_t N,
-		const Matrix1D<double>& bX, const Matrix1D<double>& bY,
-		const Matrix2D<double>& A) {
+template<typename T>
+void ProgMovieAlignmentCorrelationGPU<T>::computeShifts(size_t N,
+		const Matrix1D<T>& bX, const Matrix1D<T>& bY,
+		const Matrix2D<T>& A) {
 
 	float* correlations;
-	computeCorrelations(maxShift, N, tmpResult,
+	computeCorrelations(this->maxShift, N, tmpResult,
 			croppedOptSizeFFTX, croppedOptSizeX, croppedOptSizeY, correlationBufferImgs,
 			croppedOptBatchSize, correlations);
 
-	int resultSize = maxShift*2+1;
+	int resultSize = this->maxShift*2+1;
 
 	int noOfCorrelations = (N * (N-1))/2;
 	Image<float> imgs(resultSize, resultSize, 1, noOfCorrelations);
@@ -424,10 +441,10 @@ void ProgMovieAlignmentCorrelationGPU::computeShifts(size_t N,
 			Mcorr.data = correlations + offset;
 //			CenterFFT(Mcorr, true);
 			Mcorr.setXmippOrigin();
-			bestShift(Mcorr, bX(idx), bY(idx), NULL, maxShift);
-			if (verbose)
-				std::cerr << "Frame " << i + nfirst << " to Frame "
-						<< j + nfirst << " -> (" << bX(idx) << "," << bY(idx)
+			bestShift(Mcorr, bX(idx), bY(idx), NULL, this->maxShift);
+			if (this->verbose)
+				std::cerr << "Frame " << i + this->nfirst << " to Frame "
+						<< j + this->nfirst << " -> (" << bX(idx) << "," << bY(idx)
 						<< ")\n";
 			for (int ij = i; ij < j; ij++)
 				A(idx, ij) = 1;
@@ -489,3 +506,5 @@ void ProgMovieAlignmentCorrelationGPU::computeShifts(size_t N,
 //		delete frameFourier[i];
 //	}
 }
+
+template class ProgMovieAlignmentCorrelationGPU<float>;

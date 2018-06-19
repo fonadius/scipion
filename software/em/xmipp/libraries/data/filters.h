@@ -518,8 +518,8 @@ void bestShift(const MultidimArray<double> &I1, const MultidimArray<double> &I2,
                const MultidimArray<int> *mask=NULL);
 
 template<typename T>
-double bestShift(MultidimArray<T> &Mcorr,
-               double &shiftX, double &shiftY, const MultidimArray<int> *mask, int maxShift);
+T bestShift(MultidimArray<T> &Mcorr,
+               T &shiftX, T &shiftY, const MultidimArray<int> *mask, int maxShift);
 
 /** Translational search (non-wrapping)
  * @ingroup Filters

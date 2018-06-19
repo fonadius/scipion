@@ -47,6 +47,13 @@
     freq = (size<=1)? 0:(( (((int)idx) <= (((int)(size)) >> 1)) ? ((int)(idx)) : -((int)(size)) + ((int)(idx))) / \
            (double)(size));
 
+
+template <typename T>
+inline T FFT_idx2digFreq(size_t idx, int size, T& freq) {
+    freq = (size<=1)? 0 : (( (idx <= (size >> 1)) ? idx :  (idx - size)) / (T)size);
+	return freq;
+}
+
 #define FFT_IDX2DIGFREQ_DOUBLE(idx, size, freq) \
     freq = (size<=1)? 0:(( (((double)idx) <= (((double)(size)) / 2.0)) ? ((double)(idx)) : -((double)(size)) + ((double)(idx))) / \
            (double)(size));

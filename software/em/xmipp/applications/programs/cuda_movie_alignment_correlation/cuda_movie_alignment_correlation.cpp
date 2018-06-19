@@ -25,4 +25,4 @@
 
 #include <reconstruction_adapt_cuda/movie_alignment_correlation_gpu.h>
 
-RUN_XMIPP_PROGRAM(ProgMovieAlignmentCorrelationGPU)
+RUN_XMIPP_PROGRAM(ProgMovieAlignmentCorrelationGPU<float>)

@@ -29,35 +29,36 @@
 #include "reconstruction/movie_alignment_correlation_base.h"
 #include "reconstruction_cuda/cuda_gpu_movie_alignment_correlation.h"
 
-class ProgMovieAlignmentCorrelationGPU: public AProgMovieAlignmentCorrelation
+template<typename T>
+class ProgMovieAlignmentCorrelationGPU: public AProgMovieAlignmentCorrelation<T>
 {
 
 	// FIXME remove
 private:
 	// Fourier transforms of the input images
-	std::vector< MultidimArray<std::complex<double> > * > frameFourier;
-	std::complex<float>* tmpResult;
+	std::vector< MultidimArray<std::complex<T> > * > frameFourier;
+	std::complex<T>* tmpResult;
 
 private:
-	void loadData(const MetaData& movie, const Image<double>& dark,
-			const Image<double>& gain,
-			double targetOccupancy,
-			const MultidimArray<double>& lpf);
+	void loadData(const MetaData& movie, const Image<T>& dark,
+			const Image<T>& gain,
+			T targetOccupancy,
+			const MultidimArray<T>& lpf);
 
-	void computeShifts(size_t N, const Matrix1D<double>& bX,
-			const Matrix1D<double>& bY, const Matrix2D<double>& A);
+	void computeShifts(size_t N, const Matrix1D<T>& bX,
+			const Matrix1D<T>& bY, const Matrix2D<T>& A);
 
 	float* loadToRAM(const MetaData& movie, int noOfImgs,
-			const Image<double>& dark, const Image<double>& gain, bool cropInput);
+			const Image<T>& dark, const Image<T>& gain, bool cropInput);
 
 	void applyShiftsComputeAverage(
-				const MetaData& movie, const Image<double>& dark,
-				const Image<double>& gain, Image<double>& initialMic,
-				size_t& Ninitial, Image<double>& averageMicrograph, size_t& N);
+				const MetaData& movie, const Image<T>& dark,
+				const Image<T>& gain, Image<T>& initialMic,
+				size_t& Ninitial, Image<T>& averageMicrograph, size_t& N);
 
 private:
-	void loadFrame(const MetaData& movie, size_t objId, bool crop, Image<float>& out);
-	void setSizes(Image<float> frame, int noOfImgs);
+	void loadFrame(const MetaData& movie, size_t objId, bool crop, Image<T>& out);
+	void setSizes(Image<T> frame, int noOfImgs);
 
 	int inputOptSizeX;
 	int inputOptSizeY;

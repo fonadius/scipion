@@ -31,17 +31,18 @@
 #define SSTR( x ) static_cast< std::ostringstream & >( \
         ( std::ostringstream() << std::dec << x ) ).str()
 
-void ProgMovieAlignmentCorrelation::loadData(const MetaData& movie,
-		const Image<double>& dark, const Image<double>& gain,
-		double targetOccupancy, const MultidimArray<double>& lpf) {
-	MultidimArray<double> filter;
+template<typename T>
+void ProgMovieAlignmentCorrelation<T>::loadData(const MetaData& movie,
+		const Image<T>& dark, const Image<T>& gain,
+		T targetOccupancy, const MultidimArray<T>& lpf) {
+	MultidimArray<T> filter;
 	FourierTransformer transformer;
 	bool firstImage = true;
 	int n = 0;
 	FileName fnFrame;
-	Image<double> frame, croppedFrame, reducedFrame;
+	Image<T> frame, croppedFrame, reducedFrame;
 
-	if (verbose)
+	if (this->verbose)
 	{
 		std::cout << "Computing Fourier transform of frames ..." << std::endl;
 		init_progress_bar(movie.size());
@@ -49,35 +50,35 @@ void ProgMovieAlignmentCorrelation::loadData(const MetaData& movie,
 
 	FOR_ALL_OBJECTS_IN_METADATA(movie)
 	{
-		if (n >= nfirst && n <= nlast) {
+		if (n >= this->nfirst && n <= this->nlast) {
 			movie.getValue(MDL_IMAGE, fnFrame, __iter.objId);
-			if (yDRcorner == -1)
+			if (this->yDRcorner == -1)
 				croppedFrame.read(fnFrame);
 			else {
 				frame.read(fnFrame);
-				frame().window(croppedFrame(), yLTcorner, xLTcorner, yDRcorner,
-						xDRcorner);
+				frame().window(croppedFrame(), this->yLTcorner, this->xLTcorner, this->yDRcorner,
+						this->xDRcorner);
 			}
 			if (XSIZE(dark()) > 0)
 				croppedFrame() -= dark();
 			if (XSIZE(gain()) > 0)
 				croppedFrame() *= gain();
 			// Reduce the size of the input frame
-			scaleToSizeFourier(1, newYdim, newXdim, croppedFrame(),
+			scaleToSizeFourier(1, this->newYdim, this->newXdim, croppedFrame(),
 					reducedFrame());
 
 			// Now do the Fourier transform and filter
-			MultidimArray<std::complex<double> > *reducedFrameFourier =
-					new MultidimArray<std::complex<double> >;
+			MultidimArray<std::complex<T> > *reducedFrameFourier =
+					new MultidimArray<std::complex<T> >;
 			transformer.FourierTransform(reducedFrame(), *reducedFrameFourier,
 					true);
 			if (firstImage) {
 				firstImage = false;
 				filter.initZeros(*reducedFrameFourier);
-				scaleLPF(lpf, newXdim, newYdim, targetOccupancy, filter);
+				this->scaleLPF(lpf, this->newXdim, this->newYdim, targetOccupancy, filter);
 			}
 			for (size_t nn = 0; nn < filter.nzyxdim; ++nn) {
-				double wlpf = DIRECT_MULTIDIM_ELEM(filter, nn);
+				T wlpf = DIRECT_MULTIDIM_ELEM(filter, nn);
 					DIRECT_MULTIDIM_ELEM(*reducedFrameFourier,nn) *= wlpf;
 			}
 			frameFourier.push_back(reducedFrameFourier);
@@ -87,7 +88,7 @@ void ProgMovieAlignmentCorrelation::loadData(const MetaData& movie,
 //			Vout.write("filteredCroppedInput" + SSTR(n) + ".vol");
 		}
 		++n;
-		if (verbose)
+		if (this->verbose)
 			progress_bar(n);
 
 
@@ -104,25 +105,26 @@ void ProgMovieAlignmentCorrelation::loadData(const MetaData& movie,
 
 
 	}
-	if (verbose)
+	if (this->verbose)
 		progress_bar(movie.size());
 }
 
-void ProgMovieAlignmentCorrelation::computeShifts(size_t N,
-		const Matrix1D<double>& bX, const Matrix1D<double>& bY,
-		const Matrix2D<double>& A) {
+template<typename T>
+void ProgMovieAlignmentCorrelation<T>::computeShifts(size_t N,
+		const Matrix1D<T>& bX, const Matrix1D<T>& bY,
+		const Matrix2D<T>& A) {
 	int idx = 0;
-	MultidimArray<double> Mcorr;
-	Mcorr.resizeNoCopy(newYdim, newXdim);
+	MultidimArray<T> Mcorr;
+	Mcorr.resizeNoCopy(this->newYdim, this->newXdim);
 	Mcorr.setXmippOrigin();
 	CorrelationAux aux;
 	for (size_t i = 0; i < N - 1; ++i) {
 		for (size_t j = i + 1; j < N; ++j) {
 			bestShift(*frameFourier[i], *frameFourier[j], Mcorr, bX(idx),
-					bY(idx), aux, NULL, maxShift);
-			if (verbose)
-				std::cerr << "Frame " << i + nfirst << " to Frame "
-						<< j + nfirst << " -> (" << bX(idx) << "," << bY(idx)
+					bY(idx), aux, NULL, this->maxShift);
+			if (this->verbose)
+				std::cerr << "Frame " << i + this->nfirst << " to Frame "
+						<< j + this->nfirst << " -> (" << bX(idx) << "," << bY(idx)
 						<< ")\n";
 			for (int ij = i; ij < j; ij++)
 				A(idx, ij) = 1;
@@ -133,20 +135,21 @@ void ProgMovieAlignmentCorrelation::computeShifts(size_t N,
 	}
 }
 
-void ProgMovieAlignmentCorrelation::applyShiftsComputeAverage(
-		const MetaData& movie, const Image<double>& dark,
-		const Image<double>& gain, Image<double>& initialMic,
-		size_t& Ninitial, Image<double>& averageMicrograph, size_t& N) {
+template<typename T>
+void ProgMovieAlignmentCorrelation<T>::applyShiftsComputeAverage(
+		const MetaData& movie, const Image<T>& dark,
+		const Image<T>& gain, Image<T>& initialMic,
+		size_t& Ninitial, Image<T>& averageMicrograph, size_t& N) {
 	// Apply shifts and compute average
-	Image<double> frame, croppedFrame, reducedFrame, shiftedFrame;
-	Matrix1D<double> shift(2);
+	Image<T> frame, croppedFrame, reducedFrame, shiftedFrame;
+	Matrix1D<T> shift(2);
 	FileName fnFrame;
 	int j = 0;
 	int n = 0;
 	Ninitial = N = 0;
 	FOR_ALL_OBJECTS_IN_METADATA(movie)
 	{
-		if (n >= nfirstSum && n <= nlastSum) {
+		if (n >= this->nfirstSum && n <= this->nlastSum) {
 			movie.getValue(MDL_IMAGE, fnFrame, __iter.objId);
 			movie.getValue(MDL_SHIFT_X, XX(shift), __iter.objId);
 			movie.getValue(MDL_SHIFT_Y, YY(shift), __iter.objId);
@@ -158,20 +161,20 @@ void ProgMovieAlignmentCorrelation::applyShiftsComputeAverage(
 				frame() -= dark();
 			if (XSIZE(gain()) > 0)
 				frame() *= gain();
-			if (yDRcorner != -1)
-				frame().window(croppedFrame(), yLTcorner, xLTcorner, yDRcorner,
-						xDRcorner);
+			if (this->yDRcorner != -1)
+				frame().window(croppedFrame(), this->yLTcorner, this->xLTcorner, this->yDRcorner,
+						this->xDRcorner);
 			else
 				croppedFrame() = frame();
-			if (bin > 0) {
-				scaleToSizeFourier(1, floor(YSIZE(croppedFrame()) / bin),
-						floor(XSIZE(croppedFrame()) / bin), croppedFrame(),
+			if (this->bin > 0) {
+				scaleToSizeFourier(1, floor(YSIZE(croppedFrame()) / this->bin),
+						floor(XSIZE(croppedFrame()) / this->bin), croppedFrame(),
 						reducedFrame());
-				shift /= bin;
+				shift /= this->bin;
 				croppedFrame() = reducedFrame(); // FIXME what is this supposed to do?
 			}
 
-			if (fnInitialAvg != "") {
+			if (this->fnInitialAvg != "") {
 				if (j == 0)
 					initialMic() = croppedFrame();
 				else
@@ -179,19 +182,19 @@ void ProgMovieAlignmentCorrelation::applyShiftsComputeAverage(
 				Ninitial++;
 			}
 
-			if (fnAligned != "" || fnAvg != "") {
-				if (outsideMode == OUTSIDE_WRAP)
-					translate(BsplineOrder, shiftedFrame(), croppedFrame(),
+			if (this->fnAligned != "" || this->fnAvg != "") {
+				if (this->outsideMode == OUTSIDE_WRAP)
+					translate(this->BsplineOrder, shiftedFrame(), croppedFrame(),
 							shift, WRAP);
-				else if (outsideMode == OUTSIDE_VALUE)
-					translate(BsplineOrder, shiftedFrame(), croppedFrame(),
-							shift, DONT_WRAP, outsideValue);
+				else if (this->outsideMode == OUTSIDE_VALUE)
+					translate(this->BsplineOrder, shiftedFrame(), croppedFrame(),
+							shift, DONT_WRAP, this->outsideValue);
 				else
-					translate(BsplineOrder, shiftedFrame(), croppedFrame(),
+					translate(this->BsplineOrder, shiftedFrame(), croppedFrame(),
 							shift, DONT_WRAP, croppedFrame().computeAvg());
-				if (fnAligned != "")
-					shiftedFrame.write(fnAligned, j + 1, true, WRITE_REPLACE);
-				if (fnAvg != "") {
+				if (this->fnAligned != "")
+					shiftedFrame.write(this->fnAligned, j + 1, true, WRITE_REPLACE);
+				if (this->fnAvg != "") {
 					if (j == 0)
 						averageMicrograph() = shiftedFrame();
 					else
@@ -204,3 +207,5 @@ void ProgMovieAlignmentCorrelation::applyShiftsComputeAverage(
 		n++;
 	}
 }
+
+template class ProgMovieAlignmentCorrelation<double>;

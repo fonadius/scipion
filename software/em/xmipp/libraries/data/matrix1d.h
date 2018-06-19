@@ -1389,16 +1389,16 @@ public:
     }
 
     /** Mean and stddev value of the vector */
-    void computeMeanAndStddev(double &mean, double &stddev) const
+    void computeMeanAndStddev(T &mean, T &stddev) const
     {
     	mean=stddev=0;
         if (vdim == 0)
             return;
 
-        double sum = 0, sum2 = 0;
+        T sum = 0, sum2 = 0;
         for (size_t j = 0; j < vdim; ++j)
         {
-        	double val=VEC_ELEM(*this,j);
+        	T val=VEC_ELEM(*this,j);
             sum+=val;
             sum2+=val*val;
         }

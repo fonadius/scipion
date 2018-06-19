@@ -93,13 +93,13 @@ double interpolatedElementBSpline2D_Degree3(double x, double y, int xinit, int y
 
 
 // explicit instatiation to avoid linking issues
-template void applyGeometryGPU<double, double>(int, MultidimArray<double>&, MultidimArray<double> const&, Matrix2D<double> const&, bool, bool, double, MultidimArray<double>*);
+//template void applyGeometryGPU<float>(int, MultidimArray<double>&, MultidimArray<double> const&, Matrix2D<double> const&, bool, bool, double, MultidimArray<double>*);
 
 __global__
 void applyGeometryKernel(double x, double y,
 		bool wrap, double minxpp, double maxxpp, double minypp, double maxypp,
 		double minxp, double maxxp, double minyp, double maxyp, double xShift,
-		double yShift, double* data, int xdim, int ydim, int xinit, int yinit, double* coefs,
+		double yShift, float* data, int xdim, int ydim, int xinit, int yinit, double* coefs,
 		int coefsXDim, int coefsYDim) {
 
 	// assign pixel to thread
@@ -158,17 +158,17 @@ void applyGeometryKernel(double x, double y,
 //	}
 }
 
-template<typename T1,typename T>
 void applyGeometryGPU(int SplineDegree,
-                   MultidimArray<T>& __restrict__ result,
-                   const MultidimArray<T1>& __restrict__ V1,
-                   const Matrix2D< double > &A, bool inv,
-                   bool wrap, T outside, MultidimArray<double> *BcoeffsPtr)
+                   MultidimArray<float>& __restrict__ result,
+                   const MultidimArray<float>& __restrict__ V1,
+                   const Matrix2D<float> &At, bool inv,
+                   bool wrap, float outside, MultidimArray<double> *BcoeffsPtr)
 {
 	clock_t begin = clock();
      MultidimArray<double> Bcoeffs;
      static MultidimArray<double> *BcoeffsToUse=NULL;
-    Matrix2D<double> Ainv;
+    Matrix2D<double> A, Ainv;
+    typeCast(At, A); // FIXME implement properly
     const Matrix2D<double> * Aptr=&A;
     if (!inv)
     {
@@ -253,8 +253,8 @@ void applyGeometryGPU(int SplineDegree,
         dim3 dimBlock(BLOCK_DIM_X, BLOCK_DIM_X);
 		dim3 dimGrid(ceil(XSIZE(result)/(float)dimBlock.x), ceil(YSIZE(result)/(float)dimBlock.y));
 
-		static double* d_data = NULL;
-		size_t bytes = YXSIZE(result) * sizeof(double);
+		static float* d_data = NULL;
+		size_t bytes = YXSIZE(result) * sizeof(float);
 		if (NULL == d_data) gpuMalloc((void**) &d_data,bytes);
 //		gpuErrchk(cudaMemcpy(d_data, result.data, bytes, cudaMemcpyHostToDevice));
 //
