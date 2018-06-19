@@ -1102,14 +1102,14 @@ void ProgCTFEstimateFromPSDFast::estimate_defoci_fast()
 			A1D_ELEM(psd_exp_radial2,i)=(1-weight)*A1D_ELEM(psd_exp_radial,lowerIdx)
 												 +weight*A1D_ELEM(psd_exp_radial,lowerIdx+1);
 		}
-		//std::cout << "radial2 =" << psd_exp_radial2 << std::endl;
+		std::cout << "radial2 =" << psd_exp_radial2 << std::endl;
 		//exit(1);
 		FourierTransformer FourierPSD;
 		FourierPSD.FourierTransform(psd_exp_radial2, psd_fft, false);
 		int index = 0;
 		FOR_ALL_ELEMENTS_IN_ARRAY1D(psd_fft)
 		{
-			amplitud.push_back(sqrt(std::real(psd_fft[i])*std::real(psd_fft[i])+std::imag(psd_fft[i])*std::imag(psd_fft[i])));
+			amplitud.push_back(abs(psd_fft[i]));
 		}
 		for(size_t i=0;i<amplitud.size();i++)
 		{
@@ -1124,6 +1124,7 @@ void ProgCTFEstimateFromPSDFast::estimate_defoci_fast()
 
 		amplitud.erase(amplitud.begin(),amplitud.begin()+index);
 		double maxValue = *max_element(amplitud.rbegin(),amplitud.rend());
+		double u;
 		int finalIndex = 0;
 		for(size_t i=0;i<amplitud.size();i++)
 		{
@@ -1136,9 +1137,8 @@ void ProgCTFEstimateFromPSDFast::estimate_defoci_fast()
 			}
 			finalIndex++;
 		}
-		std::cout << finalIndex << " " << index << std::endl;
-		std::cout << finalIndex+index+XSIZE(w_digfreq)/2 << std::endl;
 		std::cout << current_ctfmodel.Defocus << std::endl;
+		std::cout << finalIndex+index+XSIZE(w_digfreq)/2 << std::endl;
 
 	}
 		// Keep the result in adjust

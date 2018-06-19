@@ -136,7 +136,7 @@ class XmippProtCTFMicrographs(em.ProtCTFMicrographs):
         
         if self.AutoDownsampling:
             if self.findPhaseShift:
-                ctfDownFactor = self.calculateAutodownsampling(samplingRate, 1.1)
+                ctfDownFactor = self.calculateAutodownsampling(samplingRate, 1.2)
             else:
                 ctfDownFactor = self.calculateAutodownsampling(samplingRate)
         else:
