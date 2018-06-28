@@ -47,17 +47,16 @@ class XmippProtCTFMicrographs(em.ProtCTFMicrographs):
                   "ctfCritfirstZeroRatio<0.9 OR ctfCritfirstZeroRatio>1.1 OR "
                   "ctfCritFirstMinFirstZeroRatio>10 OR ctfCritCorr13<0 OR "
                   "ctfCritCtfMargin<0 OR ctfCritNonAstigmaticValidty<0 OR "
-                  "ctfCritNonAstigmaticValidty>25 OR ctfBgGaussianSigmaU>75000 "
+                  "ctfCritNonAstigmaticValidty>25 "
                   "OR ctfBgGaussianSigmaU<1000 OR "
-                  "ctfCritIceness>1")
+                  "ctfCritIceness>1") #OR ctfBgGaussianSigmaU>75000 
 
     _criterion_phaseplate = ("ctfCritFirstZero<5 OR ctfCritMaxFreq>20 OR "
                   "ctfCritfirstZeroRatio<0.9 OR ctfCritfirstZeroRatio>1.1 OR "
-                  "ctfCritFirstMinFirstZeroRatio>50 AND "
-                  "ctfCritFirstMinFirstZeroRatio!=1000 OR ctfCritCorr13==0 OR "
                   "ctfCritNonAstigmaticValidty<=0 OR ctfVPPphaseshift>140 OR " 
                   "ctfCritNonAstigmaticValidty>25 "
-                  "OR ctfCritIceness>1.03") 
+                  "OR ctfCritIceness>1.03") #ctfCritCorr13==0 OR "ctfCritFirstMinFirstZeroRatio>50 AND "
+    #"ctfCritFirstMinFirstZeroRatio!=1000 OR "
 
     def __init__(self, **args):
 
@@ -136,7 +135,7 @@ class XmippProtCTFMicrographs(em.ProtCTFMicrographs):
         
         if self.AutoDownsampling:
             if self.findPhaseShift:
-                ctfDownFactor = self.calculateAutodownsampling(samplingRate, 1.2)
+                ctfDownFactor = self.calculateAutodownsampling(samplingRate, 1.1)
             else:
                 ctfDownFactor = self.calculateAutodownsampling(samplingRate)
         else:

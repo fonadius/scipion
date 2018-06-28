@@ -185,12 +185,12 @@ void ProgCTFBasicParams::produceSideInfo()
     // Resize the frequency
 	x_digfreq.initZeros(YSIZE(*f), XSIZE(*f) / 2);
 	y_digfreq.initZeros(YSIZE(*f), XSIZE(*f) / 2);
-    w_digfreq.initZeros(YSIZE(*f), XSIZE(*f) / 2);
-    w_digfreq_r.initZeros(YSIZE(*f), XSIZE(*f) / 2);
+    w_digfreq.initZeros(YSIZE(*f), XSIZE(*f)/2);
+    w_digfreq_r.initZeros(YSIZE(*f), XSIZE(*f)/2);
     x_contfreq.initZeros(YSIZE(*f), XSIZE(*f) / 2);
     y_contfreq.initZeros(YSIZE(*f), XSIZE(*f) / 2);
     w_contfreq.initZeros(YSIZE(*f), XSIZE(*f) / 2);
-
+    std::cout << XSIZE(w_digfreq) << std::endl;
     Matrix1D<int> idx(2); // Indexes for Fourier plane
     Matrix1D<double> freq(2); // Frequencies for Fourier plane
 
@@ -271,7 +271,6 @@ void ProgCTFBasicParams::produceSideInfo()
 	Filter.generateMask(enhanced_ctftomodel());
 	Filter.applyMaskSpace(enhanced_ctftomodel());
 	STARTINGX(enhanced_ctftomodel()) = STARTINGY(enhanced_ctftomodel()) = 0;
-	//global_prm->enhanced_ctftomodel()= enhanced_ctftomodel();
 
 	// Compute now radial average of the enhanced_ctftomodel
 	psd_exp_enhanced_radial_derivative.initZeros(XSIZE(enhanced_ctftomodel()));
@@ -285,12 +284,8 @@ void ProgCTFBasicParams::produceSideInfo()
 		if (w_digfreq(i,j)>min_freq && w_digfreq(i,j)<max_freq)
 		{
 			int r = w_digfreq_r(i, j);
-			//int r2 = w_digfreq_r(i,j)*w_digfreq_r(i,j);
-			//std::cout << "r =" << r << std::endl;
-			//std::cout << "r2 =" << r2 << std::endl;
 			w_digfreq_r_iN(r)+=1;
 			psd_exp_enhanced_radial(r) += enhanced_ctftomodel(i, j);
-			//psd_exp_enhanced_radial_2(r2) += enhanced_ctftomodel(i, j);
 			psd_exp_radial(r) += ctftomodel(i, j);
 		}
 	}
