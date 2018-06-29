@@ -190,7 +190,6 @@ void ProgCTFBasicParams::produceSideInfo()
     x_contfreq.initZeros(YSIZE(*f), XSIZE(*f) / 2);
     y_contfreq.initZeros(YSIZE(*f), XSIZE(*f) / 2);
     w_contfreq.initZeros(YSIZE(*f), XSIZE(*f) / 2);
-    std::cout << XSIZE(w_digfreq) << std::endl;
     Matrix1D<int> idx(2); // Indexes for Fourier plane
     Matrix1D<double> freq(2); // Frequencies for Fourier plane
 
