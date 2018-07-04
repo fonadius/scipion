@@ -652,7 +652,7 @@ void CTFDescription1D::produceSideInfo()
     // X(u)=-PI*deltaf(u)*lambda*u^2+PI/2*Cs*lambda^3*u^4
     // ICE: X(u)=-PI/2*deltaf(u)*lambda*u^2+PI/2*Cs*lambda^3*u^4
     //          = K1*deltaf(u)*u^2         +K2*u^4
-    K1 = PI / 2 * 2 * lambda;
+    K1 = PI * lambda;
     K2 = PI / 2 * local_Cs * lambda * lambda * lambda;
 
     // Envelope

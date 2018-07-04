@@ -389,7 +389,7 @@ double ProgCTFEstimateFromPSDFast::CTF_fitness_object_fast(double *p)
             std::cout << "Too large defocus\n";
         return heavy_penalization;
     }
-    if (initial_ctfmodel.Defocus != 0 && action >= 3)
+    if (initial_ctfmodel.Defocus != 0 && action >= 3 && !selfEstimation)
     {
         // If there is an initial model, the true solution
         // cannot be too far
@@ -1081,17 +1081,32 @@ void ProgCTFEstimateFromPSDFast::estimate_defoci_fast()
 	}
 	else
 	{
+		/*
+		 * Defocus estimation s² stigmator
+		 *
+		 * CTF = sin(PI*lambda*defocus*R²)
+		 * CTF = sin(PI*lambda*defocus*w²/Ts²)
+		 * w² = omega
+		 * omega = 2*K0/Xdim   K0: position of the maximum of the psd in fourier
+		 *
+		 * Defocus = 2*K0*(2*Ts)²/lambda
+		 */
 		MultidimArray<double> psd_exp_radial2;
-		/*MultidimArray<double> background;
+		MultidimArray<double> background;
+		MultidimArray<double> psd_background;
+		action = 1;
 		generateModelSoFar_fast(background, false);
+		action = 3;
+		psd_background.initZeros(background);
 		FOR_ALL_ELEMENTS_IN_ARRAY1D(background)
 		{
-			A1D_ELEM(background,i)= background(i)-psd_exp_radial(i);
-		}*/
+			if(w_digfreq(i)>min_freq && w_digfreq(i)<max_freq)
+				psd_background(i)= background(i)-psd_exp_radial(i);
+		}
 		psd_exp_radial2.initZeros(psd_exp_radial);
-		double deltaW=1.0/XSIZE(w_digfreq);
-		double wmax=(XSIZE(w_digfreq)/2.0-1)/XSIZE(w_digfreq);
-		double deltaW2=(wmax*wmax)/(XSIZE(w_digfreq)/2.0-1);
+
+		double deltaW=1.0/(2*XSIZE(w_digfreq)*current_ctfmodel.Tm);
+		double deltaW2=1.0/(XSIZE(w_digfreq)*pow(2*current_ctfmodel.Tm,2));
 		FOR_ALL_ELEMENTS_IN_ARRAY1D(psd_exp_radial2)
 		{
 			double w2=i*deltaW2;
@@ -1099,58 +1114,46 @@ void ProgCTFEstimateFromPSDFast::estimate_defoci_fast()
 			double widx=w/deltaW;
 			size_t lowerIdx=floor(widx);
 			double weight=widx-floor(widx);
-			A1D_ELEM(psd_exp_radial2,i)=(1-weight)*A1D_ELEM(psd_exp_radial,lowerIdx)
-												 +weight*A1D_ELEM(psd_exp_radial,lowerIdx+1);
-		}
-		std::cout << "radial2 =" << psd_exp_radial2 << std::endl;
-		//exit(1);
-		FourierTransformer FourierPSD;
-		FourierPSD.FourierTransform(psd_exp_radial2, psd_fft, false);
-		int index = 0;
-		FOR_ALL_ELEMENTS_IN_ARRAY1D(psd_fft)
-		{
-			amplitud.push_back(abs(psd_fft[i]));
-		}
-		for(size_t i=0;i<amplitud.size();i++)
-		{
-			double change = amplitud[i+1]-amplitud[i];
-			if(change > 0.0)
-			{
-				double initialIndex = index;
-				break;
-			}
-			index++;
+			double value =(1-weight)*A1D_ELEM(psd_background,lowerIdx)
+												 +weight*A1D_ELEM(psd_background,lowerIdx+1);
+
+			A1D_ELEM(psd_exp_radial2,i) = value*value;
 		}
 
-		amplitud.erase(amplitud.begin(),amplitud.begin()+index);
+		FourierTransformer FourierPSD;
+		FourierPSD.FourierTransform(psd_exp_radial2, psd_fft, false);
+
+		int index = 0;
+		int startIndex = 7; //avoid low frequencies
+		FOR_ALL_ELEMENTS_IN_ARRAY1D(psd_fft)
+		{
+			if(i>=startIndex)
+			amplitud.push_back(abs(psd_fft[i]));
+		}
+
 		double maxValue = *max_element(amplitud.rbegin(),amplitud.rend());
-		double u;
 		int finalIndex = 0;
 		for(size_t i=0;i<amplitud.size();i++)
 		{
 			if(maxValue == amplitud[i])
 			{
-				current_ctfmodel.Defocus = (((current_ctfmodel.Tm*current_ctfmodel.Tm)*
-						(finalIndex+index+XSIZE(w_digfreq)/2))/
-						(XSIZE(w_digfreq)*2*PI*current_ctfmodel.lambda))*1000;
+				current_ctfmodel.Defocus = (2*floor((finalIndex+startIndex)/2)*pow(2*current_ctfmodel.Tm,2))/
+												current_ctfmodel.lambda;
 				break;
 			}
 			finalIndex++;
 		}
-		std::cout << current_ctfmodel.Defocus << std::endl;
-		std::cout << finalIndex+index+XSIZE(w_digfreq)/2 << std::endl;
-
 	}
-		// Keep the result in adjust
-		current_ctfmodel.forcePhysicalMeaning();
-		COPY_ctfmodel_TO_CURRENT_GUESS;
-		ctfmodel_defoci = current_ctfmodel;
+	// Keep the result in adjust
+	current_ctfmodel.forcePhysicalMeaning();
+	COPY_ctfmodel_TO_CURRENT_GUESS;
+	ctfmodel_defoci = current_ctfmodel;
 
-		if  (show_optimization)
-		{
-			std::cout << "First defocus Fit:\n" << ctfmodel_defoci << std::endl;
-			saveIntermediateResults_fast("step03a_first_defocus_fit_fast", true);
-		}
+	if  (show_optimization)
+	{
+		std::cout << "First defocus Fit:\n" << ctfmodel_defoci << std::endl;
+		saveIntermediateResults_fast("step03a_first_defocus_fit_fast", true);
+	}
 
 
 }
@@ -1457,7 +1460,6 @@ double ROUT_Adjust_CTFFast(ProgCTFEstimateFromPSDFast &prm, CTFDescription1D &ou
 	steps.initConstant(1);
 	steps(3) = 0; // kV
 	steps(5) = 0; // The spherical aberration (Cs) is not optimized
-	//steps(6) = 0;
 	steps(37) = 0; //VPP radius not optimized
 	if (prm2D->initial_ctfmodel.Q0 != 0)
 	    steps(15) = 0; // Q0
