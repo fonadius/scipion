@@ -94,6 +94,17 @@ class TestRelionBase(BaseTest):
         cls.launchProtocol(protImport)
         return protImport
 
+    @classmethod
+    def runImportMovies(cls, pattern, mag, samplingRate, dose):
+        """ Run an Import movies protocol. """
+        protImport = cls.newProtocol(ProtImportMovies,
+                                     filesPath=pattern,
+                                     magnification=mag,
+                                     samplingRate=samplingRate,
+                                     dosePerFrame=dose)
+        cls.launchProtocol(protImport)
+        return protImport
+
 
 class TestRelionClassify2D(TestRelionBase):
     @classmethod
@@ -815,7 +826,48 @@ class TestRelionExpandSymmetry(TestRelionBase):
                                " must be %d" % (sizeOut, sizeIn * 4))
 
 
+class TestRelionExtractMovieParticles(TestRelionBase):
+    @classmethod
+    def setUpClass(cls):
+        setupTestProject(cls)
+        cls.ds = DataSet.getDataSet('relion_tutorial')
+        cls.partRef3dFn = cls.ds.getFile('import/refine3d_case2/relion_data.star')
+        cls.movies = DataSet.getDataSet('movies').getFile('ribo/*.mrcs')
+        cls.protImportMovies = cls.runImportMovies(cls.movies, 50000, 3.54, 1.0)
+        cls.protImportParts = cls.runImportParticlesStar(cls.partRef3dFn,
+                                                         50000, 3.54)
+
+    def _runExtract(self, boxsize, frame0, frameN, avgFrames, doInvert):
+        if not isVersion2():
+            raise Exception('Extract movie particles protocol exists only for Relion v2.0 or higher!')
+
+        prot = self.newProtocol(ProtRelionExtractMovieParticles,
+                                boxSize=boxsize, frame0=frame0, frameN=frameN,
+                                avgFrames=avgFrames, doInvert=doInvert)
+        prot.inputMovies.set(self.protImportMovies.outputMovies)
+        prot.inputParticles.set(self.protImportParts.outputParticles)
+        self.launchProtocol(prot)
+
+        self.assertIsNotNone(prot.outputParticles,
+                             "There was a problem with extract movie particles protocol")
+        sizeIn = prot.inputParticles.get().getSize()
+        sizeOut = prot.outputParticles.getSize()
+        factor = (frameN - frame0 + 1) / avgFrames
+        if factor % avgFrames > 0:
+            factor += 1
+        self.assertEqual(sizeIn * factor, sizeOut,
+                         "Number of output movie particles is %d and must be "
+                         "%d" % (sizeOut, sizeIn * factor))
+
+    def test_extractMovieParticlesAvg1(self):
+        self._runExtract(100, 1, 16, 1, True)
+
+    def test_extractMovieParticlesAvg3(self):
+        self._runExtract(100, 1, 16, 3, True)
+
+        
 class TestRelionCreate3dMask(TestRelionBase):
+
     @classmethod
     def setUpClass(cls):
         setupTestProject(cls)
@@ -1128,3 +1180,86 @@ class TestRelionExtractParticles(TestRelionBase):
                              "There was a problem generating the output.")
         self.assertTrue(outputParts.hasCTF(), "Output does not have CTF.")
         self._checkSamplingConsistency(outputParts)
+
+
+class TestRelionCenterAverages(TestRelionBase):
+    @classmethod
+    def setUpClass(cls):
+        setupTestProject(cls)
+        cls.ds = DataSet.getDataSet('mda')
+
+    def test_basic(self):
+        """ Run an Import particles protocol. """
+        protImport = self.newProtocol(ProtImportAverages,
+                                     filesPath=self.ds.getFile('averages/averages.stk'),
+                                     samplingRate=5.04)
+        self.launchProtocol(protImport)
+        inputAvgs = protImport.outputAverages
+        protCenter = self.newProtocol(ProtRelionCenterAverages)
+        protCenter.inputAverages.set(inputAvgs)
+        self.launchProtocol(protCenter)
+
+        conditions = ['outputAverages.getSize()==%d' % inputAvgs.getSize(),
+                      'outputAverages.getSamplingRate() - %f < 0.00001'
+                      % inputAvgs.getSamplingRate()]
+        self.checkOutput(protCenter, 'outputAverages', conditions)
+
+
+class TestRelionExportParticles(TestRelionBase):
+    @classmethod
+    def setUpClass(cls):
+        setupTestProject(cls)
+        cls.ds = DataSet.getDataSet('xmipp_tutorial')
+        cls.particlesFn = cls.ds.getFile('particles')
+        cls.runImportParticles(cls.particlesFn, 1.237, True)
+
+    @classmethod
+    def runImportParticles(cls, pattern, samplingRate, checkStack=False,
+                           phaseFlip=False):
+        """ Run an Import particles protocol. """
+        cls.protImport = cls.newProtocol(ProtImportParticles,
+                                         filesPath=pattern,
+                                         samplingRate=samplingRate,
+                                         checkStack=checkStack,
+                                         haveDataBeenPhaseFlipped=phaseFlip)
+        print('_label: ', cls.protImport._label)
+        cls.launchProtocol(cls.protImport)
+        # check that input images have been imported (a better way to do this?)
+        if cls.protImport.outputParticles is None:
+            raise Exception('Import of images: %s, failed. outputParticles is None.' % pattern)
+        return cls.protImport
+
+    def test_basic(self):
+        """ Run an Import particles protocol. """
+
+        inputParts = self.protImport.outputParticles
+
+        stackNames = set(pwutils.removeBaseExt(p.getFileName()) for p in inputParts)
+
+        paramsList = [
+            {'stackType': 0, 'useAlignment': True},
+            {'stackType': 0, 'useAlignment': False},
+            {'stackType': 1, 'useAlignment': True},
+            {'stackType': 1, 'useAlignment': False},
+            {'stackType': 2, 'useAlignment': True},
+            {'stackType': 2, 'useAlignment': False}
+        ]
+
+        def _checkProt(prot, params):
+            stackFiles = glob(prot._getPath('Particles', '*mrcs'))
+            n = len(stackFiles)
+            if params['stackType'] == 0:
+                self.assertEqual(n, 0)
+            elif params['stackType'] == 1:
+                self.assertGreaterEqual(n, 1)
+            else:
+                self.assertEqual(n, 1)
+
+        for i, params in enumerate(paramsList):
+            exportProt = self.newProtocol(ProtRelionExportParticles,
+                                          objectLabel='export %d' % (i+1),
+                                          **params)
+            exportProt.inputParticles.set(inputParts)
+            self.launchProtocol(exportProt)
+            _checkProt(exportProt, params)
+
