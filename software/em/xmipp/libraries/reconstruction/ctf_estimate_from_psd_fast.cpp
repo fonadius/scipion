@@ -1123,7 +1123,6 @@ void ProgCTFEstimateFromPSDFast::estimate_defoci_fast()
 		FourierTransformer FourierPSD;
 		FourierPSD.FourierTransform(psd_exp_radial2, psd_fft, false);
 
-		int index = 0;
 		int startIndex = 7; //avoid low frequencies
 		FOR_ALL_ELEMENTS_IN_ARRAY1D(psd_fft)
 		{
@@ -1137,7 +1136,7 @@ void ProgCTFEstimateFromPSDFast::estimate_defoci_fast()
 		{
 			if(maxValue == amplitud[i])
 			{
-				current_ctfmodel.Defocus = (2*floor((finalIndex+startIndex)/2)*pow(2*current_ctfmodel.Tm,2))/
+				current_ctfmodel.Defocus = (floor((finalIndex+startIndex))*pow(2*current_ctfmodel.Tm,2))/
 												current_ctfmodel.lambda;
 				break;
 			}
