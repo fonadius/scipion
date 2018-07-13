@@ -38,6 +38,8 @@ from pyworkflow.utils import makePath, runJob, copyTree, cleanPath
 import pyworkflow as pw
 import xmipp
 import pyworkflow.gui.dialog as dialog
+import matplotlib.pyplot as plt
+import numpy as np
 
 from protocol_cl2d_align import XmippProtCL2DAlign
 from protocol_cl2d import XmippProtCL2D
@@ -258,6 +260,24 @@ class XmippViewer(Viewer):
                 self._views.append(self.infoMessage("No CTF estimation has finished yet"))
             else:
                 self._views.append(CtfView(self._project, ctfSet))
+
+            if obj.getAttributeValue('findPhaseShift') == True:
+                from pyworkflow.em.plotter import EmPlotter
+                phase_shift = []
+                for path in sorted(os.listdir(obj._getExtraPath(''))):
+                    try:
+                        file = obj._getExtraPath(path + '/xmipp_ctf.xmd')
+                        md = xmipp.MetaData(file)
+                        phase_shift.append(md.getValue(xmipp.MDL_CTF_PHASE_SHIFT,1))
+                    except:
+                        pass
+
+                plotter = EmPlotter()
+                plotter.createSubPlot("Phase Shift estimation",
+                                      "Number of CTFs", "Phase Shift")
+                plotter.plotData(np.arange(0,len(phase_shift)),phase_shift)
+                plotter.show()
+
 
         elif issubclass(cls, SetOfCTF):
             self._views.append(CtfView(self._project, obj))
