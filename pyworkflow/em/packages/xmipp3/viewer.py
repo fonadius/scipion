@@ -259,24 +259,7 @@ class XmippViewer(Viewer):
             if ctfSet.isEmpty():
                 self._views.append(self.infoMessage("No CTF estimation has finished yet"))
             else:
-                self._views.append(CtfView(self._project, ctfSet))
-
-            if obj.getAttributeValue('findPhaseShift') == True:
-                from pyworkflow.em.plotter import EmPlotter
-                phase_shift = []
-                for path in sorted(os.listdir(obj._getExtraPath(''))):
-                    try:
-                        file = obj._getExtraPath(path + '/xmipp_ctf.xmd')
-                        md = xmipp.MetaData(file)
-                        phase_shift.append(md.getValue(xmipp.MDL_CTF_PHASE_SHIFT,1))
-                    except:
-                        pass
-
-                plotter = EmPlotter()
-                plotter.createSubPlot("Phase Shift estimation",
-                                      "Number of CTFs", "Phase Shift")
-                plotter.plotData(np.arange(0,len(phase_shift)),phase_shift)
-                plotter.show()
+                self.getCTFViews(ctfSet)
 
 
         elif issubclass(cls, SetOfCTF):
@@ -439,5 +422,27 @@ class XmippViewer(Viewer):
         return self._views
 
 
+    def getCTFViews(self, ctfSet):
+    # This could be used by any CTF viewer to show CTF plus, phaseShift plot
+    # if applies.
 
+        # Return phaseShift plot if apply
+        firstCtf = ctfSet.getFirstItem()
 
+        if firstCtf.hasPhaseShift():
+
+            from pyworkflow.em.plotter import EmPlotter
+            phase_shift = []
+
+            for ctf in ctfSet.iterItems():
+                phShift = ctf.getPhaseShift()
+                phase_shift.append(phShift)
+
+            plotter = EmPlotter()
+            plotter.createSubPlot("Phase Shift estimation",
+                                  "Number of CTFs", "Phase Shift")
+            plotter.plotData(np.arange(0, len(phase_shift)), phase_shift)
+            self._views.append(plotter)
+
+        # Return Standard CTF view (showJ)
+        self._views.append(CtfView(self._project, ctfSet))
