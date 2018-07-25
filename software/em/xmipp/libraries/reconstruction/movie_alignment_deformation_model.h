@@ -42,6 +42,8 @@ private:
 	//----Input arguments----
 	FileName fnMovie;		// Input movie data
 	FileName fnMicrograph;	// Output micrograph
+    double initDose = 0;        // radiation dose recieved before the first frame
+    double perFrameDose;    // radiation dose recieved while imaging one frame
 	int maxIterations = 10;	// Limits the number of iterations for shift calculation (Default value taken from Unblur)
 	FileName fnUnaligned;	// Micrograph calculated from unaligned frames
 	int upScaling = 1;

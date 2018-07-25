@@ -30,6 +30,8 @@ void ProgMovieAlignmentDeformationModel::readParams()
 {
 	fnMovie = getParam("-i");
 	fnMicrograph = getParam("-o");
+    initDose = getDoubleParam("--initDose");
+    perFrameDose = getDoubleParam("--perFrameDose");
     maxIterations = getIntParam("--maxIterations");
     upScaling = getIntParam("--upscaling");
     fnUnaligned = getParam("--ounaligned");
@@ -46,6 +48,8 @@ void ProgMovieAlignmentDeformationModel::show()
     std::cout 
     << "Input movie:          " << fnMovie           << std::endl
     << "Output micrograph:    " << fnMicrograph      << std::endl
+    << "Initial dose:         " << initDose          << std::endl
+    << "Per frame dose:       " << perFrameDose      << std::endl
     << "Max iterations:       " << maxIterations     << std::endl
     << "Up scaling coef.:     " << upScaling         << std::endl
 	<< "Unaligned micrograph: " << fnUnaligned       << std::endl
@@ -59,6 +63,8 @@ void ProgMovieAlignmentDeformationModel::defineParams()
     addUsageLine("Align a set of frames by cross-correlation of the frames");
     addParamsLine("   -i <metadata>               : Metadata with the list of frames to align");
     addParamsLine("   -o <fn=\"\"> 		          : Give the name of a micrograph to generate an aligned micrograph");
+    addParamsLine("  [--initDose <N=0>]           : Radiation dose received before first frame is taken");
+    addParamsLine("  [--perFrameDose]             : Radiation dose received after imaging each frame");
     addParamsLine("  [--maxIterations <N=5>]	  : Number of robust least squares iterations");
     addParamsLine("  [--upscaling <N=1>]          : UpScaling coefficient for super resolution image generated from model application");
     addParamsLine("  [--ounaligned <fn=\"\">]     : Give the name of a micrograph to generate an unaligned (initial) micrograph");
@@ -116,9 +122,19 @@ void ProgMovieAlignmentDeformationModel::run()
         frames[i].setXmippOrigin();
     }
 	motionCorrect(this->frames, this->correctedFrames, this->timeStamps, this->deformationCoefficientsX,
-			this->deformationCoefficientsY, this->upScaling);;
+			this->deformationCoefficientsY, this->upScaling);
+
+
 
 	averageFrames(this->frames, this->correctedMicrograph);
+
+    //save partials
+    int i = 0;
+    for (const MultidimArray<double>& ma : this->frames) {
+        FileName fn = "/home/fonadius/Downloads/" + std::to_string(i) + ".jpg";
+        saveMicrograph(fn, ma);
+        i++;
+    }
 
 	saveMicrograph(this->fnMicrograph, this->correctedMicrograph);
 }
