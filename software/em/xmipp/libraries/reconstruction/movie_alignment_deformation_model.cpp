@@ -64,8 +64,8 @@ void ProgMovieAlignmentDeformationModel::defineParams()
     addParamsLine("   -i <metadata>               : Metadata with the list of frames to align");
     addParamsLine("   -o <fn=\"\"> 		          : Give the name of a micrograph to generate an aligned micrograph");
     addParamsLine("  [--initDose <N=0>]           : Radiation dose received before first frame is taken");
-    addParamsLine("  [--perFrameDose]             : Radiation dose received after imaging each frame");
-    addParamsLine("  [--maxIterations <N=5>]	  : Number of robust least squares iterations");
+    addParamsLine("  [--perFrameDose <s=0>]       : Radiation dose received after imaging each frame");
+    addParamsLine("  [--maxIterations <s=0>]	  : Number of robust least squares iterations");
     addParamsLine("  [--upscaling <N=1>]          : UpScaling coefficient for super resolution image generated from model application");
     addParamsLine("  [--ounaligned <fn=\"\">]     : Give the name of a micrograph to generate an unaligned (initial) micrograph");
     addParamsLine("  [-j <N=5>]                   : Maximum threads the program is allowed to use");
@@ -74,9 +74,12 @@ void ProgMovieAlignmentDeformationModel::defineParams()
 }
 
 void ProgMovieAlignmentDeformationModel::run()
-{
-	loadMovie(this->fnMovie, this->frames, this->timeStamps, this->fnDark, this->fnGain);
+{   
+    firstTime = initDose / perFrameDose;
+    timeIncrement = 1;
 
+    loadMovie(this->fnMovie, this->frames, this->timeStamps, this->fnDark, this->fnGain);
+    
     if (!fnUnaligned.isEmpty()) {
         averageFrames(this->frames, this->unalignedMicrograph);
         saveMicrograph(this->fnUnaligned, this->unalignedMicrograph);
@@ -152,8 +155,30 @@ void ProgMovieAlignmentDeformationModel::loadMovie(FileName fnMovie, std::vector
     if (not this->fnGain.isEmpty()) {
         gain.read(fnGain);
     }
+    Image<double> movieStack;
+    movieStack.read(fnMovie, HEADER);
+    size_t Xdim, Ydim, Zdim, Ndim;
+    movieStack.getDimensions(Xdim, Ydim, Zdim, Ndim);
+    std::cout << Xdim << "," << Ydim << "," << Zdim <<"," << Ndim << ::std::endl;
+    for (size_t z = 1; z <= Ndim; z++) {
+        Image<double> frame;
+        frame.read(fnMovie, DATA, z);
+        frame().setXmippOrigin();
 
-    MDRow  row;
+        if (dark().xdim > 0) {
+            frame() -= dark();
+        }
+        if (gain().xdim > 0) {
+            frame() *= gain();
+        }
+
+        frames.push_back(frame());
+        timeStamps.push_back(firstTime + timeIncrement * z);
+    }
+
+    std::cout << "---DATA were read----" << std::endl;
+    
+    /*MDRow  row;
     double time;
     FileName fnFrame;
     FileName fnFolder = fnMovie.getDir();
@@ -183,7 +208,7 @@ void ProgMovieAlignmentDeformationModel::loadMovie(FileName fnMovie, std::vector
         } else {
             std::cerr << "Missing value of _image" << std::endl;
         }
-    }
+    }*/
 }
 
 void ProgMovieAlignmentDeformationModel::saveMicrograph(FileName fnMicrograph, const MultidimArray<double>& micrograph)
