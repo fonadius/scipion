@@ -35,23 +35,20 @@
 #include <alglib/src/stdafx.h>
 
 
-/** Movie alignment correlation Parameters. */
 class ProgMovieAlignmentDeformationModel: public XmippProgram
 {
 private:
 	//----Input arguments----
-	FileName fnMovie;		// Input movie data
+	FileName fnMovie;		// Input movie stack
 	FileName fnMicrograph;	// Output micrograph
-    double initDose;    // radiation dose recieved before the first frame
-    double perFrameDose;    // radiation dose recieved while imaging one frame
-
-    double firstTime;       // time point of the first frame
-    double timeIncrement;   // time increment for each frame
+    double initDose;        // radiation dose recieved before the first frame
+    double perFrameDose;    // radiation dose recieved for each imagined frame 
 
 	int maxIterations;      // max number of iterations for shift calculation
 	FileName fnUnaligned;	// Micrograph calculated from unaligned frames
 	int upScaling;
     int threadNumbers;
+    //correction images
 	FileName fnGain;
 	FileName fnDark;
 
@@ -76,15 +73,10 @@ private:
 
 	const int PARTITION_AXIS_COUNT = 5;	//number of partitions along each axis 
 public:
-    /// Read argument from command line
     void readParams();
-    /// Show
     void show();
-    /// Define parameters
     void defineParams();
-    /// Run
     void run();
-
 public:
 	void loadMovie(FileName fnMovie, std::vector<MultidimArray<double> >& frames,
             std::vector<double>& timeStamps, FileName fnDark, FileName fnGain);
@@ -95,15 +87,6 @@ public:
 	void estimateShifts(const std::vector<MultidimArray<double> >& data,
             std::vector<double>& shiftsX, std::vector<double>& shiftsY,
             int maxIterations=50, double minImprovement=0.1);
-	/**
-	 * @brief [brief description]
-	 * @details [long description]
-	 * 
-	 * @param c [description]
-	 * @param dim dim[0] - y, dim[1] - x, dim[2] - t
-	 * @param func [description]
-	 * @param ptr [description]
-	 */
 	static void calculateShift2(const alglib::real_1d_array &c,
             const alglib::real_1d_array &dim, double &func, void *ptr);
 	double calculateShift(double x, double y, double t,
