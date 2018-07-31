@@ -96,48 +96,49 @@ void ProgMovieAlignmentDeformationModel::run()
 	applyShifts(frames, globalShiftsX, globalShiftsY);
 
     partitions.clear();
-    partitions.resize(PARTITION_AXIS_COUNT * PARTITION_AXIS_COUNT, {});
+    partitions.resize(PARTITION_AXIS_COUNT * PARTITION_AXIS_COUNT);
     for (int i = 0; i < partitions.size(); i++) {
-        partitions[i].resize(frames.size());
+        //partitions[i].resize(frames.size());
+        partitions[i] = std::vector<MultidimArray>(frames.size());
     }
-    partitionFrames(gframes, partitions, PARTITION_AXIS_COUNT);
+    partitionFrames(frames, partitions, PARTITION_AXIS_COUNT);
 
-    glocalShiftsX.clear();
-    glocalShiftsX.resize(frames.size() * PARTITION_AXIS_COUNT * PARTITION_AXIS_COUNT, 0.0);
-    glocalShiftsY.clear();
-    glocalShiftsY.resize(frames.size() * PARTITION_AXIS_COUNT * PARTITION_AXIS_COUNT, 0.0);
-	estimateLocalShifts(gpartitions, localShiftsX, localShiftsY);
+    localShiftsX.clear();
+    localShiftsX.resize(frames.size() * PARTITION_AXIS_COUNT * PARTITION_AXIS_COUNT, 0.0);
+    localShiftsY.clear();
+    localShiftsY.resize(frames.size() * PARTITION_AXIS_COUNT * PARTITION_AXIS_COUNT, 0.0);
+	estimateLocalShifts(partitions, localShiftsX, localShiftsY);
 
-    gdeformationCoefficientsX.clear();
-    gdeformationCoefficientsX.resize(9, 0.0);
-    gdeformationCoefficientsY.clear();
-    gdeformationCoefficientsY.resize(9, 0.0);
-	calculateModelCoefficients(glocalShiftsX, timeStamps,
-			gdeformationCoefficientsX, frames[0].ydim, frames[0].xdim);
-	calculateModelCoefficients(glocalShiftsY, timeStamps,
-			gdeformationCoefficientsY, frames[0].ydim, frames[0].xdim);
+    deformationCoefficientsX.clear();
+    deformationCoefficientsX.resize(9, 0.0);
+    deformationCoefficientsY.clear();
+    deformationCoefficientsY.resize(9, 0.0);
+	calculateModelCoefficients(localShiftsX, timeStamps,
+			deformationCoefficientsX, frames[0].ydim, frames[0].xdim);
+	calculateModelCoefficients(localShiftsY, timeStamps,
+			deformationCoefficientsY, frames[0].ydim, frames[0].xdim);
 
-    gcorrectedFrames.clear();
-    gcorrectedFrames.resize(frames.size());
-    for (int i = 0; i < gcorrectedFrames.size(); i++) {
-        gcorrectedFrames[i].initZeros(gframes[0]);
-        gcorrectedFrames[i].setXmippOrigin();
+    correctedFrames.clear();
+    correctedFrames.resize(frames.size());
+    for (int i = 0; i < correctedFrames.size(); i++) {
+        correctedFrames[i].initZeros(frames[0]);
+        correctedFrames[i].setXmippOrigin();
     }
     for (int i = 0; i < frames.size(); i++) {
         frames[i].setXmippOrigin();
     }
-	motionCorrect(gframes, correctedFrames, timeStamps, deformationCoefficientsX,
-			gdeformationCoefficientsY, upScaling);
+	motionCorrect(frames, correctedFrames, timeStamps, deformationCoefficientsX,
+			deformationCoefficientsY, upScaling);
 
-	averageFrames(gframes, correctedMicrograph);
+	averageFrames(frames, correctedMicrograph);
 
     //save partials
-    for (int i = 0; i < gframes.size(); i++) {
-        FileName fn = "/home/fonadius/Downloads/" + std::to_string(i) + ".jpg";
-        saveMicrograph(fn, gframes[i]);
+    for (int i = 0; i < frames.size(); i++) {
+        FileName fn = "/home/fonadius/Downloads/" + itoa(i) + ".jpg";
+        saveMicrograph(fn, frames[i]);
     }
 
-	saveMicrograph(gfnMicrograph, correctedMicrograph);
+	saveMicrograph(fnMicrograph, correctedMicrograph);
 }
 
 void ProgMovieAlignmentDeformationModel::loadMovie(FileName fnMovie,
@@ -148,10 +149,10 @@ void ProgMovieAlignmentDeformationModel::loadMovie(FileName fnMovie,
     movie.read(fnMovie, NULL, "movie_stack");
 
     Image<double> dark, gain;
-    if (not gfnDark.isEmpty()) {
+    if (not fnDark.isEmpty()) {
         dark.read(fnDark);
     }
-    if (not gfnGain.isEmpty()) {
+    if (not fnGain.isEmpty()) {
         gain.read(fnGain);
     }
     Image<double> movieStack;
@@ -366,7 +367,7 @@ void ProgMovieAlignmentDeformationModel::estimateLocalShifts(
     std::vector<double> tmpXShifts(partDepth);
     std::vector<double> tmpYShifts(partDepth);
     for (int i = 0; i < partitions.size(); i++) {
-        estimateShifts(partitions[i], tmpXShifts, tmpYShifts, gmaxIterations);
+        estimateShifts(partitions[i], tmpXShifts, tmpYShifts, maxIterations);
         for (int j = 0; j < partDepth; j++) {
         	shiftsX[i + j*partsPerFrame] = tmpXShifts[j];
         	shiftsY[i + j*partsPerFrame] = tmpYShifts[j];
@@ -393,7 +394,7 @@ void ProgMovieAlignmentDeformationModel::calculateModelCoefficients(
 
 	alglib::real_2d_array positions;
 	positions.setlength(shifts.size(), 3);
-	int partsInFrame = gPARTITION_AXIS_COUNT * PARTITION_AXIS_COUNT;
+	int partsInFrame = PARTITION_AXIS_COUNT * PARTITION_AXIS_COUNT;
     int curFrame = -1;
     double cummulativeX, cummulativeY;
     int partSizeX, partSizeY;

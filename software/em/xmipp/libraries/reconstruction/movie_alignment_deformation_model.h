@@ -29,6 +29,8 @@
 
 #include <alglib/src/interpolation.h>
 #include <alglib/src/stdafx.h>
+#include <float.h>
+#include <stdlib.h>
 #include "data/xmipp_program.h"
 #include "data/metadata_extension.h"
 #include "data/xmipp_fftw.h"
@@ -43,6 +45,9 @@ private:
 	FileName fnMicrograph;	// Output micrograph
     double initDose;        // radiation dose recieved before the first frame
     double perFrameDose;    // radiation dose recieved for each imagined frame 
+
+    double firstTime;
+    double timeIncrement;
 
 	int maxIterations;      // max number of iterations for shift calculation
 	FileName fnUnaligned;	// Micrograph calculated from unaligned frames
@@ -71,7 +76,7 @@ private:
 	MultidimArray<double> correctedMicrograph;
 	MultidimArray<double> unalignedMicrograph;
 
-	const int PARTITION_AXIS_COUNT = 5;	//number of partitions along each axis 
+	const static int PARTITION_AXIS_COUNT = 5;	//partition count on each axis 
 public:
     void readParams();
     void show();
