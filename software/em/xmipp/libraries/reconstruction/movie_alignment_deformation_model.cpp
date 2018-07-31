@@ -75,6 +75,8 @@ void ProgMovieAlignmentDeformationModel::defineParams()
 
 void ProgMovieAlignmentDeformationModel::run()
 {   
+    std::cout << "init: " << initDose << ", perFrame: " << perFrameDose
+        << std::endl;
     firstTime = initDose / perFrameDose;
     timeIncrement = 1;
 
@@ -117,9 +119,9 @@ void ProgMovieAlignmentDeformationModel::run()
 
     gcorrectedFrames.clear();
     gcorrectedFrames.resize(frames.size());
-    for (MultidimArray<double>& ma : gcorrectedFrames) {
-        ma.initZeros(gframes[0]);
-        ma.setXmippOrigin();
+    for (int i = 0; i < gcorrectedFrames.size(); i++) {
+        gcorrectedFrames[i].initZeros(gframes[0]);
+        gcorrectedFrames[i].setXmippOrigin();
     }
     for (int i = 0; i < frames.size(); i++) {
         frames[i].setXmippOrigin();
@@ -130,11 +132,9 @@ void ProgMovieAlignmentDeformationModel::run()
 	averageFrames(gframes, correctedMicrograph);
 
     //save partials
-    int i = 0;
-    for (const MultidimArray<double>& ma : gframes) {
+    for (int i = 0; i < gframes.size(); i++) {
         FileName fn = "/home/fonadius/Downloads/" + std::to_string(i) + ".jpg";
-        saveMicrograph(fn, ma);
-        i++;
+        saveMicrograph(fn, gframes[i]);
     }
 
 	saveMicrograph(gfnMicrograph, correctedMicrograph);
@@ -271,10 +271,10 @@ void ProgMovieAlignmentDeformationModel::partitionFrames(
         int partX = i % edgeCount;
         int xSize = partSizeX + (partX < xReminder ? 1 : 0);
         int ySize = partSizeY + (partY < yReminder ? 1 : 0);
-        for (MultidimArray<double>& part : partitions[i]) {
-            part.resize(1, 1, ySize, xSize);
-            part.initZeros();
-            part.setXmippOrigin();
+        for (int j = 0; j < partitions[i].size(); i++) {
+            partitions[i][j].resize(1, 1, ySize, xSize);
+            partitions[i][j].initZeros();
+            partitions[i][j].setXmippOrigin();
         }
     }
 
@@ -316,15 +316,15 @@ void ProgMovieAlignmentDeformationModel::estimateShifts(
     MultidimArray<double> sum;
     sum.initZeros(data[0]);
     sum.setXmippOrigin();
-    for (const MultidimArray<double>& ma : data) {
-        sum = sum + ma;
+    for (int i = 0; i < data.size(); i++) {
+        sum = sum + data[i];
     }    
     // estimate the shifts
     double shiftX;
     double shiftY;
     CorrelationAux aux;
     int cycle = 0;
-    double maxDiff = std::numeric_limits<double>::max();
+    double maxDiff = DBL_MAX;
     MultidimArray<double> helper;
     while (cycle < maxIterations) {
         maxDiff = 0;

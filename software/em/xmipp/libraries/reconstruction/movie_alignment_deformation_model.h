@@ -27,12 +27,12 @@
 #ifndef _PROG_MOVIE_ALIGNMENT_DEFORMATION_MODEL
 #define _PROG_MOVIE_ALIGNMENT_DEFORMATION_MODEL
 
+#include <alglib/src/interpolation.h>
+#include <alglib/src/stdafx.h>
 #include "data/xmipp_program.h"
 #include "data/metadata_extension.h"
 #include "data/xmipp_fftw.h"
 #include "data/filters.h"
-#include <alglib/src/interpolation.h>
-#include <alglib/src/stdafx.h>
 
 
 class ProgMovieAlignmentDeformationModel: public XmippProgram
