@@ -133,10 +133,10 @@ void ProgMovieAlignmentDeformationModel::run()
 	averageFrames(frames, correctedMicrograph);
 
     //save partials
-    for (int i = 0; i < frames.size(); i++) {
-        FileName fn = "/home/fonadius/Downloads/" + std::to_string(i) + ".jpg";
-        saveMicrograph(fn, frames[i]);
-    }
+    //for (int i = 0; i < frames.size(); i++) {
+        //FileName fn = "/home/fonadius/Downloads/" + std::to_string(i) + ".jpg";
+        //saveMicrograph(fn, frames[i]);
+    //}
 
 	saveMicrograph(fnMicrograph, correctedMicrograph);
 }
