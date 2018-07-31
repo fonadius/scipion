@@ -98,8 +98,8 @@ void ProgMovieAlignmentDeformationModel::run()
     partitions.clear();
     partitions.resize(PARTITION_AXIS_COUNT * PARTITION_AXIS_COUNT);
     for (int i = 0; i < partitions.size(); i++) {
-        //partitions[i].resize(frames.size());
-        partitions[i] = std::vector<MultidimArray>(frames.size());
+        partitions[i].resize(frames.size());
+        //partitions[i] = std::vector<MultidimArray>(frames.size());
     }
     partitionFrames(frames, partitions, PARTITION_AXIS_COUNT);
 
@@ -134,7 +134,7 @@ void ProgMovieAlignmentDeformationModel::run()
 
     //save partials
     for (int i = 0; i < frames.size(); i++) {
-        FileName fn = "/home/fonadius/Downloads/" + itoa(i) + ".jpg";
+        FileName fn = "/home/fonadius/Downloads/" + std::to_string(i) + ".jpg";
         saveMicrograph(fn, frames[i]);
     }
 
@@ -409,7 +409,7 @@ void ProgMovieAlignmentDeformationModel::calculateModelCoefficients(
             cummulativeY += partSizeY;
         }
 
-        calculatePartitionSize(partIndex, gPARTITION_AXIS_COUNT, frameHeight,
+        calculatePartitionSize(partIndex, PARTITION_AXIS_COUNT, frameHeight,
                 frameWidth, partSizeX, partSizeY);
 
 		positions[i][0] = cummulativeY + (partSizeY / 2.0);
