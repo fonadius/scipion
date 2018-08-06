@@ -65,7 +65,7 @@ void ProgMovieAlignmentDeformationModel::defineParams()
     addParamsLine("   -o <fn=\"\"> 		          : Give the name of a micrograph to generate an aligned micrograph");
     addParamsLine("  [--initDose <N=0>]           : Radiation dose received before first frame is taken");
     addParamsLine("  [--perFrameDose <s=0>]       : Radiation dose received after imaging each frame");
-    addParamsLine("  [--maxIterations <s=0>]	  : Number of robust least squares iterations");
+    addParamsLine("  [--maxIterations <s=10>]	  : Number of robust least squares iterations");
     addParamsLine("  [--upscaling <N=1>]          : UpScaling coefficient for super resolution image generated from model application");
     addParamsLine("  [--ounaligned <fn=\"\">]     : Give the name of a micrograph to generate an unaligned (initial) micrograph");
     addParamsLine("  [-j <N=5>]                   : Maximum threads the program is allowed to use");
@@ -93,6 +93,10 @@ void ProgMovieAlignmentDeformationModel::run()
     globalShiftsY.resize(frames.size(), 0.0);
     std::cout << "Estimating global shifts" << std::endl;
     estimateShifts(frames, globalShiftsX, globalShiftsY, maxIterations);
+    for (int i = 0; i < frames.size(); i++) {
+        std::cout << i << ": Y-shift " << globalShiftsY[i] << std::endl;
+        std::cout << i << ": X-shift " << globalShiftsX[i] << std::endl;
+    }
     std::cout << "Applying global shifts" << std::endl;
     applyShifts(frames, globalShiftsX, globalShiftsY);
     
@@ -111,6 +115,10 @@ void ProgMovieAlignmentDeformationModel::run()
     localShiftsY.resize(frames.size() * PARTITION_AXIS_COUNT * PARTITION_AXIS_COUNT, 0.0);
     std::cout << "Estimating local shifts" << std::endl;
     estimateLocalShifts(partitions, localShiftsX, localShiftsY);
+    for (int i = 0; i < frames.size(); i++) {
+        std::cout << i << ": Y-shift " << localShiftsY[i] << std::endl;
+        std::cout << i << ": X-shift " << localShiftsX[i] << std::endl;
+    }
 
     deformationCoefficientsX.clear();
     deformationCoefficientsX.resize(9, 0.0);
@@ -228,7 +236,7 @@ void ProgMovieAlignmentDeformationModel::applyShifts(
 	helper.initZeros(data[0]);
 	helper.setXmippOrigin();
 	for (int i = 0; i < data.size(); i++) {
-		translate(2, helper, data[i], vectorR2(shiftsX[i], shiftsY[i]), false,
+		translate(3, helper, data[i], vectorR2(shiftsX[i] + 100, shiftsY[i]), false,
                 0.0);
 		data[i] = helper;
 	}
@@ -327,7 +335,6 @@ void ProgMovieAlignmentDeformationModel::estimateShifts(
 		std::vector<double>& shiftsX, std::vector<double>& shiftsY,
         int maxIterations, double minImprovement)
 {
-	
 	// prepare sum of images
     MultidimArray<double> sum;
     sum.initZeros(data[0]);
@@ -336,8 +343,7 @@ void ProgMovieAlignmentDeformationModel::estimateShifts(
         sum = sum + data[i];
     }    
     // estimate the shifts
-    double shiftX;
-    double shiftY;
+    double shiftX, shiftY;
     CorrelationAux aux;
     int cycle = 0;
     double maxDiff = DBL_MAX;
