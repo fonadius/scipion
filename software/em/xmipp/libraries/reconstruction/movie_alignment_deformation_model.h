@@ -89,7 +89,7 @@ public:
 
 	void estimateShifts(const std::vector<MultidimArray<double> >& data,
             std::vector<double>& shiftsX, std::vector<double>& shiftsY,
-            int maxIterations=50, double minImprovement=0.1);
+            int maxIterations=20);
 	static void calculateShift2(const alglib::real_1d_array &c,
             const alglib::real_1d_array &dim, double &func, void *ptr);
 	double calculateShift(double x, double y, double t,

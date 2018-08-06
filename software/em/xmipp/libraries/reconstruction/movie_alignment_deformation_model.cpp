@@ -65,7 +65,7 @@ void ProgMovieAlignmentDeformationModel::defineParams()
     addParamsLine("   -o <fn=\"\"> 		          : Give the name of a micrograph to generate an aligned micrograph");
     addParamsLine("  [--initDose <N=0>]           : Radiation dose received before first frame is taken");
     addParamsLine("  [--perFrameDose <s=0>]       : Radiation dose received after imaging each frame");
-    addParamsLine("  [--maxIterations <s=10>]	  : Number of robust least squares iterations");
+    addParamsLine("  [--maxIterations <s=20>]	  : Number of robust least squares iterations");
     addParamsLine("  [--upscaling <N=1>]          : UpScaling coefficient for super resolution image generated from model application");
     addParamsLine("  [--ounaligned <fn=\"\">]     : Give the name of a micrograph to generate an unaligned (initial) micrograph");
     addParamsLine("  [-j <N=5>]                   : Maximum threads the program is allowed to use");
@@ -154,7 +154,6 @@ void ProgMovieAlignmentDeformationModel::loadMovie(FileName fnMovie,
     std::cout << Xdim << "," << Ydim << "," << Zdim <<"," << Ndim << std::endl;
     bool switched = false;
     if (Zdim == 1 and Ndim > 1) {
-        //TODO: check that it is mrc
         Zdim = Ndim;
         switched = true;
     }
@@ -312,7 +311,7 @@ void ProgMovieAlignmentDeformationModel::partitionFrames(
 void ProgMovieAlignmentDeformationModel::estimateShifts(
         const std::vector<MultidimArray<double> >& data,
 		std::vector<double>& shiftsX, std::vector<double>& shiftsY,
-        int maxIterations, double minImprovement)
+        int maxIterations)
 {
 	// prepare sum of images
     MultidimArray<double> sum;
@@ -329,6 +328,7 @@ void ProgMovieAlignmentDeformationModel::estimateShifts(
     double shiftX, shiftY;
     CorrelationAux aux;
     for (int cycle = 0; cycle < maxIterations; cycle++) {
+        std::cout << "Cycle: " << cycle << std::endl;
         for (int i = 0; i < data.size(); i++) {
             sum -= shiftedData[i];
             //sum = sum / (data.size() - 1);
@@ -361,6 +361,8 @@ void ProgMovieAlignmentDeformationModel::estimateLocalShifts(
     std::vector<double> tmpXShifts(partDepth);
     std::vector<double> tmpYShifts(partDepth);
     for (int i = 0; i < partitions.size(); i++) {
+        std::cout << "Local movement estimation for partition " << i
+            << std::endl;
         estimateShifts(partitions[i], tmpXShifts, tmpYShifts, maxIterations);
         for (int j = 0; j < partDepth; j++) {
         	shiftsX[i + j*partsPerFrame] = tmpXShifts[j];
