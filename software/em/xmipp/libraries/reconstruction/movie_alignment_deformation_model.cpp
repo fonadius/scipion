@@ -75,81 +75,79 @@ void ProgMovieAlignmentDeformationModel::defineParams()
 
 void ProgMovieAlignmentDeformationModel::run()
 {  
-    std::cout << "AHOJ" << std::endl;
-    //return;
-    //std::cout << "init: " << initDose << ", perFrame: " << perFrameDose
-        //<< std::endl;
-    //firstTime = initDose / perFrameDose;
-    //timeIncrement = 1;
+    std::cout << "init: " << initDose << ", perFrame: " << perFrameDose
+        << std::endl;
+    firstTime = initDose / perFrameDose;
+    timeIncrement = 1;
 
-    //loadMovie(fnMovie, frames, timeStamps, fnDark, fnGain);
+    loadMovie(fnMovie, frames, timeStamps, fnDark, fnGain);
     
-    //if (!fnUnaligned.isEmpty()) {
-        //averageFrames(frames, unalignedMicrograph);
-        //saveMicrograph(fnUnaligned, unalignedMicrograph);
-    //}
+    if (!fnUnaligned.isEmpty()) {
+        averageFrames(frames, unalignedMicrograph);
+        saveMicrograph(fnUnaligned, unalignedMicrograph);
+    }
 
-    //globalShiftsX.clear();
-    //globalShiftsX.resize(frames.size(), 0.0);
-    //globalShiftsY.clear();
-    //globalShiftsY.resize(frames.size(), 0.0);
-	//estimateShifts(frames, globalShiftsX, globalShiftsY, maxIterations);
+    std::cout << "FIN" << std::endl;
+    return;
 
-	//applyShifts(frames, globalShiftsX, globalShiftsY);
+    globalShiftsX.clear();
+    globalShiftsX.resize(frames.size(), 0.0);
+    globalShiftsY.clear();
+    globalShiftsY.resize(frames.size(), 0.0);
+    estimateShifts(frames, globalShiftsX, globalShiftsY, maxIterations);
 
-    //partitions.clear();
-    //partitions.resize(PARTITION_AXIS_COUNT * PARTITION_AXIS_COUNT);
-    //for (int i = 0; i < partitions.size(); i++) {
-        //partitions[i].resize(frames.size());
-        ////partitions[i] = std::vector<MultidimArray>(frames.size());
-    //}
-    //partitionFrames(frames, partitions, PARTITION_AXIS_COUNT);
+    applyShifts(frames, globalShiftsX, globalShiftsY);
 
-    //localShiftsX.clear();
-    //localShiftsX.resize(frames.size() * PARTITION_AXIS_COUNT * PARTITION_AXIS_COUNT, 0.0);
-    //localShiftsY.clear();
-    //localShiftsY.resize(frames.size() * PARTITION_AXIS_COUNT * PARTITION_AXIS_COUNT, 0.0);
-	//estimateLocalShifts(partitions, localShiftsX, localShiftsY);
+    partitions.clear();
+    partitions.resize(PARTITION_AXIS_COUNT * PARTITION_AXIS_COUNT);
+    for (int i = 0; i < partitions.size(); i++) {
+        partitions[i].resize(frames.size());
+        //partitions[i] = std::vector<MultidimArray>(frames.size());
+    }
+    partitionFrames(frames, partitions, PARTITION_AXIS_COUNT);
 
-    //deformationCoefficientsX.clear();
-    //deformationCoefficientsX.resize(9, 0.0);
-    //deformationCoefficientsY.clear();
-    //deformationCoefficientsY.resize(9, 0.0);
-	//calculateModelCoefficients(localShiftsX, timeStamps,
-			//deformationCoefficientsX, frames[0].ydim, frames[0].xdim);
-	//calculateModelCoefficients(localShiftsY, timeStamps,
-			//deformationCoefficientsY, frames[0].ydim, frames[0].xdim);
+    localShiftsX.clear();
+    localShiftsX.resize(frames.size() * PARTITION_AXIS_COUNT * PARTITION_AXIS_COUNT, 0.0);
+    localShiftsY.clear();
+    localShiftsY.resize(frames.size() * PARTITION_AXIS_COUNT * PARTITION_AXIS_COUNT, 0.0);
+    estimateLocalShifts(partitions, localShiftsX, localShiftsY);
 
-    //correctedFrames.clear();
-    //correctedFrames.resize(frames.size());
-    //for (int i = 0; i < correctedFrames.size(); i++) {
-        //correctedFrames[i].initZeros(frames[0]);
-        //correctedFrames[i].setXmippOrigin();
-    //}
+    deformationCoefficientsX.clear();
+    deformationCoefficientsX.resize(9, 0.0);
+    deformationCoefficientsY.clear();
+    deformationCoefficientsY.resize(9, 0.0);
+    calculateModelCoefficients(localShiftsX, timeStamps,
+            deformationCoefficientsX, frames[0].ydim, frames[0].xdim);
+    calculateModelCoefficients(localShiftsY, timeStamps,
+            deformationCoefficientsY, frames[0].ydim, frames[0].xdim);
+
+    correctedFrames.clear();
+    correctedFrames.resize(frames.size());
+    for (int i = 0; i < correctedFrames.size(); i++) {
+        correctedFrames[i].initZeros(frames[0]);
+        correctedFrames[i].setXmippOrigin();
+    }
+    for (int i = 0; i < frames.size(); i++) {
+        frames[i].setXmippOrigin();
+    }
+    motionCorrect(frames, correctedFrames, timeStamps, deformationCoefficientsX,
+            deformationCoefficientsY, upScaling);
+
+    averageFrames(frames, correctedMicrograph);
+
+    //save partials
     //for (int i = 0; i < frames.size(); i++) {
-        //frames[i].setXmippOrigin();
+        //FileName fn = "/home/fonadius/Downloads/" + std::to_string(i) + ".jpg";
+        //saveMicrograph(fn, frames[i]);
     //}
-	//motionCorrect(frames, correctedFrames, timeStamps, deformationCoefficientsX,
-			//deformationCoefficientsY, upScaling);
 
-	//averageFrames(frames, correctedMicrograph);
-
-    ////save partials
-    ////for (int i = 0; i < frames.size(); i++) {
-        ////FileName fn = "/home/fonadius/Downloads/" + std::to_string(i) + ".jpg";
-        ////saveMicrograph(fn, frames[i]);
-    ////}
-
-	//saveMicrograph(fnMicrograph, correctedMicrograph);
+    saveMicrograph(fnMicrograph, correctedMicrograph);
 }
 
 void ProgMovieAlignmentDeformationModel::loadMovie(FileName fnMovie,
         std::vector<MultidimArray<double> >& frames,
         std::vector<double>& timeStamps, FileName fnDark, FileName fnGain)
 {
-    MetaData movie;
-    movie.read(fnMovie, NULL, "movie_stack");
-
     Image<double> dark, gain;
     if (not fnDark.isEmpty()) {
         dark.read(fnDark);
@@ -157,27 +155,40 @@ void ProgMovieAlignmentDeformationModel::loadMovie(FileName fnMovie,
     if (not fnGain.isEmpty()) {
         gain.read(fnGain);
     }
+
     Image<double> movieStack;
-    movieStack.read(fnMovie, HEADER);
+    movieStack.read(fnMovie);
     size_t Xdim, Ydim, Zdim, Ndim;
     movieStack.getDimensions(Xdim, Ydim, Zdim, Ndim);
-    std::cout << Xdim << "," << Ydim << "," << Zdim <<"," << Ndim << ::std::endl;
-    for (size_t z = 1; z <= Ndim; z++) {
-        Image<double> frame;
-        frame.read(fnMovie, DATA, z);
-        frame().setXmippOrigin();
+    std::cout << Xdim << "," << Ydim << "," << Zdim <<"," << Ndim << std::endl;
+    bool switched = false;
+    if (Zdim == 1 and Ndim > 1) {
+        //TODO: check that it is mrc
+        Zdim = Ndim;
+        switched = true;
+    }
+    frames.resize(Zdim, MultidimArray<double>(Ydim, Xdim));
+    for (size_t z = 0; z < Zdim; z++) {
+        FOR_ALL_DIRECT_ELEMENTS_IN_ARRAY2D(frames[z]) {
+            if (not switched) {
+                DIRECT_A2D_ELEM(frames[z], i, j) = DIRECT_NZYX_ELEM(movieStack(),
+                                                                0, z, i, j);
+            } else {
+                DIRECT_A2D_ELEM(frames[z], i, j) = DIRECT_NZYX_ELEM(movieStack(),
+                                                                z, 0, i, j);
+            }
+        }
+        frames[z].setXmippOrigin();
 
         if (dark().xdim > 0) {
-            frame() -= dark();
+            frames[z] -= dark();
         }
         if (gain().xdim > 0) {
-            frame() *= gain();
+            frames[z] *= gain();
         }
 
-        frames.push_back(frame());
-        timeStamps.push_back(firstTime + timeIncrement * z);
+        timeStamps.push_back(firstTime + timeIncrement * z); //TODO: z + 1??
     }
-
     std::cout << "---DATA were read----" << std::endl;
 }
 
