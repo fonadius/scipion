@@ -73,23 +73,22 @@ private:
 	MultidimArray<double> correctedMicrograph;
 	MultidimArray<double> unalignedMicrograph;
 
-	const static int PARTITION_AXIS_COUNT = 5;	//partition count on each axis 
+	const static int PARTITION_COUNT = 5;	//partition count on each axis 
 public:
     void readParams();
     void show();
     void defineParams();
     void run();
-public:
+private:
 	void loadMovie(FileName fnMovie,
             std::vector<MultidimArray<double> >& frames,
             std::vector<double>& timeStamps, FileName fnDark, FileName fnGain);
 	void saveMicrograph(FileName fnMicrograph,
             const MultidimArray<double>& micrograph);
-	void saveCalculatedMetadata();
 
 	void estimateShifts(const std::vector<MultidimArray<double> >& data,
             std::vector<double>& shiftsX, std::vector<double>& shiftsY,
-            int maxIterations=20);
+            int maxIterations);
 	static void calculateShift2(const alglib::real_1d_array &c,
             const alglib::real_1d_array &dim, double &func, void *ptr);
 	double calculateShift(double x, double y, double t,
@@ -98,47 +97,21 @@ public:
             const std::vector<double>& shiftsX,
             const std::vector<double>& shiftsY);
 
-	/**
-	 * @brief Performs linear interpolation
-	 * @details  With the following argument naming
-	    y1: v11 ......... v12
-	        .................
-	        ...... p ........
-	        .................
-	        .................
-	    y2: v21 ......... v22
-	        x1             x2
-	    (y increases from top to down, x increases from left to right)
-	    Values q_i are expected to be in strict orthogonal grid, where q11 and
-        q21 have the same x coordinates (the same applies for q12 and q22) and
-        q11 and q12 have the same y coordinates (the same applies for q21 and
-        q22).
-	 * 
-	 * @param y [description]
-	 * @param x [description]
-	 * 
-	 * @return [description]
-	 * TODO: maybe move somewhere else?
-	 */
 	double linearInterpolation(double y1, double x1, double y2, double x2,
             double v11, double v12, double v21, double v22, double p_y,
             double p_x);
-
 	void partitionFrames(const std::vector<MultidimArray<double> >& frames,
 			std::vector<std::vector<MultidimArray<double> > >& partitions,
             int edgeCount);
-
 	void downsampleFrame(MultidimArray<double>& in, MultidimArray<double>& out,
             int scalingFactor);
-
 	void estimateLocalShifts(
             const std::vector<std::vector<MultidimArray<double> > >& partitions,
-			std::vector<double>& shiftsX, std::vector<double>& shiftsY);
-
+			std::vector<double>& shiftsX, std::vector<double>& shiftsY,
+            int maxIterations);
 	void calculateModelCoefficients(const std::vector<double>& shifts,
             const std::vector<double>& timeStamps, std::vector<double>& coeffs,
             int frameHeight, int frameWidth);
-
 	void motionCorrect(const std::vector<MultidimArray<double> >& input,
             std::vector<MultidimArray<double> >& output,
             const std::vector<double>& timeStamps,
@@ -146,11 +119,11 @@ public:
             int upScaling);
 	void applyDeformation(const MultidimArray<double>& input,
             MultidimArray<double>& output, const std::vector<double>& cx,
-            const std::vector<double>& cy, double t1, double t2);
+            const std::vector<double>& cy, double t1, double t2, 
+            int scalingFactor);
 
 	void averageFrames(const std::vector<MultidimArray<double> >& data,
             MultidimArray<double>& out);
-
 	void calculatePartitionSize(int partIndex, int edgeCount, int frameHeight,
             int frameWidth, int& partXSize, int& partYSize);
 };
