@@ -75,11 +75,6 @@ void ProgMovieAlignmentDeformationModel::defineParams()
 
 void ProgMovieAlignmentDeformationModel::run()
 {  
-    std::cout << "init: " << initDose << ", perFrame: " << perFrameDose
-        << std::endl;
-    firstTime = initDose / perFrameDose;
-    timeIncrement = 1;
-
     loadMovie(fnMovie, frames, timeStamps, fnDark, fnGain);
     
     if (!fnUnaligned.isEmpty()) {
@@ -93,19 +88,14 @@ void ProgMovieAlignmentDeformationModel::run()
     globalShiftsY.resize(frames.size(), 0.0);
     std::cout << "Estimating global shifts" << std::endl;
     estimateShifts(frames, globalShiftsX, globalShiftsY, maxIterations);
-    for (int i = 0; i < frames.size(); i++) {
-        std::cout << i << ": Y-shift " << globalShiftsY[i] << std::endl;
-        std::cout << i << ": X-shift " << globalShiftsX[i] << std::endl;
-    }
     std::cout << "Applying global shifts" << std::endl;
     applyShifts(frames, globalShiftsX, globalShiftsY);
-    
+
     std::cout << "Partitioning" << std::endl;
     partitions.clear();
     partitions.resize(PARTITION_AXIS_COUNT * PARTITION_AXIS_COUNT);
     for (int i = 0; i < partitions.size(); i++) {
         partitions[i].resize(frames.size());
-        //partitions[i] = std::vector<MultidimArray>(frames.size());
     }
     partitionFrames(frames, partitions, PARTITION_AXIS_COUNT);
 
@@ -115,11 +105,7 @@ void ProgMovieAlignmentDeformationModel::run()
     localShiftsY.resize(frames.size() * PARTITION_AXIS_COUNT * PARTITION_AXIS_COUNT, 0.0);
     std::cout << "Estimating local shifts" << std::endl;
     estimateLocalShifts(partitions, localShiftsX, localShiftsY);
-    for (int i = 0; i < frames.size(); i++) {
-        std::cout << i << ": Y-shift " << localShiftsY[i] << std::endl;
-        std::cout << i << ": X-shift " << localShiftsX[i] << std::endl;
-    }
-
+    
     deformationCoefficientsX.clear();
     deformationCoefficientsX.resize(9, 0.0);
     deformationCoefficientsY.clear();
@@ -142,14 +128,7 @@ void ProgMovieAlignmentDeformationModel::run()
             deformationCoefficientsY, upScaling);
 
     std::cout << "Frame averaging" << std::endl;
-    averageFrames(frames, correctedMicrograph);
-
-    //save partials
-    std::cout << "Saving partial results" << std::endl;
-    for (int i = 0; i < frames.size(); i++) {
-        FileName fn = "/scratch/workdir/" + std::to_string(i) + ".jpg";
-        saveMicrograph(fn, frames[i]);
-    }
+    averageFrames(correctedFrames, correctedMicrograph);
 
     std::cout << "Saving end result" << std::endl;
     saveMicrograph(fnMicrograph, correctedMicrograph);
@@ -171,6 +150,7 @@ void ProgMovieAlignmentDeformationModel::loadMovie(FileName fnMovie,
     movieStack.read(fnMovie);
     size_t Xdim, Ydim, Zdim, Ndim;
     movieStack.getDimensions(Xdim, Ydim, Zdim, Ndim);
+    std::cout << "Loading stack with dimensions (x, y, z, n): ";
     std::cout << Xdim << "," << Ydim << "," << Zdim <<"," << Ndim << std::endl;
     bool switched = false;
     if (Zdim == 1 and Ndim > 1) {
@@ -198,9 +178,8 @@ void ProgMovieAlignmentDeformationModel::loadMovie(FileName fnMovie,
             frames[z] *= gain();
         }
 
-        timeStamps.push_back(firstTime + timeIncrement * z); //TODO: z + 1??
+        timeStamps.push_back(initDose + perFrameDose * z);
     }
-    std::cout << "---DATA were read----" << std::endl;
 }
 
 void ProgMovieAlignmentDeformationModel::saveMicrograph(FileName fnMicrograph,
@@ -236,8 +215,8 @@ void ProgMovieAlignmentDeformationModel::applyShifts(
 	helper.initZeros(data[0]);
 	helper.setXmippOrigin();
 	for (int i = 0; i < data.size(); i++) {
-		translate(3, helper, data[i], vectorR2(shiftsX[i] + 100, shiftsY[i]), false,
-                0.0);
+		translate(3, helper, data[i], vectorR2(shiftsX[i], shiftsY[i]),
+                false, 0.0);
 		data[i] = helper;
 	}
 }
@@ -337,42 +316,36 @@ void ProgMovieAlignmentDeformationModel::estimateShifts(
 {
 	// prepare sum of images
     MultidimArray<double> sum;
-    sum.initZeros(data[0]);
-    sum.setXmippOrigin();
-    for (int i = 0; i < data.size(); i++) {
-        sum = sum + data[i];
-    }    
+    averageFrames(data, sum);
+
+    std::vector<MultidimArray<double> > shiftedData;
+    shiftedData.resize(data.size());
+    for (int i = 0; i < shiftedData.size(); i++) {
+        shiftedData[i].initZeros(data[i]);
+        shiftedData[i] += data[i];
+    }
+
     // estimate the shifts
     double shiftX, shiftY;
     CorrelationAux aux;
-    int cycle = 0;
-    double maxDiff = DBL_MAX;
-    MultidimArray<double> helper;
-    while (cycle < maxIterations) {
-        maxDiff = 0;
-        cycle++;
+    for (int cycle = 0; cycle < maxIterations; cycle++) {
         for (int i = 0; i < data.size(); i++) {
-            sum -= data[i];
-            sum = sum / (data.size() - 1);
+            sum -= shiftedData[i];
+            //sum = sum / (data.size() - 1);
             bestShift(sum, data[i], shiftX, shiftY, aux);
-            sum = sum * (data.size() - 1);
-            sum += data[i];
-
-            double diff = std::max(std::abs(shiftsX[i] - shiftX), 
-                            std::abs(shiftsY[i] - shiftY));
-            maxDiff = std::max(maxDiff, diff);
+            //sum = sum * (data.size() - 1);
+            sum += shiftedData[i];
 
             shiftsY[i] = shiftY;
             shiftsX[i] = shiftX;
-
         }
 
         // recalculate avrg
         sum.initZeros();
         for (int i = 0; i < data.size(); i++) {
-            translate(2, helper, data[i], vectorR2(shiftsX[i], shiftsY[i]),
-                    false, 0.0);
-            sum += helper;
+            translate(3, shiftedData[i], data[i],
+                    vectorR2(shiftsX[i], shiftsY[i]), false, 0.0);
+            sum += shiftedData[i];
         }
     }
 }
@@ -397,8 +370,9 @@ void ProgMovieAlignmentDeformationModel::estimateLocalShifts(
 }
 
 void ProgMovieAlignmentDeformationModel::calculateModelCoefficients(
-        const std::vector<double>& shifts, const std::vector<double>& timeStamps,
-        std::vector<double>& coeffs, int frameHeight, int frameWidth)
+        const std::vector<double>& shifts,
+        const std::vector<double>& timeStamps, std::vector<double>& coeffs,
+        int frameHeight, int frameWidth)
 {
 	alglib::real_1d_array c;
 	c.setlength(coeffs.size());
@@ -518,7 +492,7 @@ void ProgMovieAlignmentDeformationModel::applyDeformation(
     int scalingFactor = upScaling;
     int maxX = input.xdim;
     int maxY = input.ydim;
-    FOR_ALL_DIRECT_ELEMENTS_IN_ARRAY2D(output)
+    FOR_ALL_DIRECT_ELEMENTS_IN_ARRAY2D(input)
     {
         int y = i;
         int x = j;
@@ -526,24 +500,19 @@ void ProgMovieAlignmentDeformationModel::applyDeformation(
         int realY = floor(y / scalingFactor);
         int realX = floor(x / scalingFactor);
 
-        double posy = y + calculateShift(y, x, t2, cy) - calculateShift(y, x,
-                t1, cy);
-        double posx = x + calculateShift(y, x, t2, cx) - calculateShift(y, x,
-                t1, cx);
+        double posy = (y + calculateShift(realX, realY, t2, cy) -
+                calculateShift(realX, realY, t1, cy));
+        double posx = (x + calculateShift(realX, realY, t2, cx) -
+                calculateShift(realX, realY, t1, cx));
 
         int x_left = floor(posx);
         int x_right = x_left + 1;
         int y_down = floor(posy);
         int y_up = y_down + 1;
-
-        x_left /= scalingFactor;
-        x_right /= scalingFactor;
-        y_down /= scalingFactor;
-        y_up /= scalingFactor;
-
+        //TODO: scaling
         double val;
-        if (x_right <= 0 || y_up <= 0 || x_left >= maxX -1 ||
-                y_down >= maxY - 1) {
+        if ((x_right < 0 or x_right >= maxX) or (x_left < 0 or x_left >= maxX)
+                or (y_up < 0 or y_up >=maxY) or (y_down < 0 or y_down >= maxY)) {
             val = 0;
         } else {
             double v11 = dAij(input, y_down, x_left);
@@ -554,7 +523,7 @@ void ProgMovieAlignmentDeformationModel::applyDeformation(
                     v21, v22, posy, posx);
         }
 
-        dAij(output, i, j) = val;
+        DIRECT_A2D_ELEM(output, i, j) = val;
     }	
 }
 

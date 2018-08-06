@@ -46,9 +46,6 @@ private:
     double initDose;        // radiation dose recieved before the first frame
     double perFrameDose;    // radiation dose recieved for each imagined frame 
 
-    double firstTime;
-    double timeIncrement;
-
 	int maxIterations;      // max number of iterations for shift calculation
 	FileName fnUnaligned;	// Micrograph calculated from unaligned frames
 	int upScaling;
@@ -83,7 +80,8 @@ public:
     void defineParams();
     void run();
 public:
-	void loadMovie(FileName fnMovie, std::vector<MultidimArray<double> >& frames,
+	void loadMovie(FileName fnMovie,
+            std::vector<MultidimArray<double> >& frames,
             std::vector<double>& timeStamps, FileName fnDark, FileName fnGain);
 	void saveMicrograph(FileName fnMicrograph,
             const MultidimArray<double>& micrograph);
@@ -143,8 +141,9 @@ public:
 
 	void motionCorrect(const std::vector<MultidimArray<double> >& input,
             std::vector<MultidimArray<double> >& output,
-            const std::vector<double>& timeStamps, const std::vector<double>& cx,
-            const std::vector<double>& cy, int upScaling);
+            const std::vector<double>& timeStamps,
+            const std::vector<double>& cx, const std::vector<double>& cy,
+            int upScaling);
 	void applyDeformation(const MultidimArray<double>& input,
             MultidimArray<double>& output, const std::vector<double>& cx,
             const std::vector<double>& cy, double t1, double t2);
