@@ -87,17 +87,16 @@ void ProgMovieAlignmentDeformationModel::run()
         saveMicrograph(fnUnaligned, unalignedMicrograph);
     }
 
-    std::cout << "FIN" << std::endl;
-    return;
-
     globalShiftsX.clear();
     globalShiftsX.resize(frames.size(), 0.0);
     globalShiftsY.clear();
     globalShiftsY.resize(frames.size(), 0.0);
+    std::cout << "Estimating global shifts" << std::endl;
     estimateShifts(frames, globalShiftsX, globalShiftsY, maxIterations);
-
+    std::cout << "Applying global shifts" << std::endl;
     applyShifts(frames, globalShiftsX, globalShiftsY);
-
+    
+    std::cout << "Partitioning" << std::endl;
     partitions.clear();
     partitions.resize(PARTITION_AXIS_COUNT * PARTITION_AXIS_COUNT);
     for (int i = 0; i < partitions.size(); i++) {
@@ -110,12 +109,14 @@ void ProgMovieAlignmentDeformationModel::run()
     localShiftsX.resize(frames.size() * PARTITION_AXIS_COUNT * PARTITION_AXIS_COUNT, 0.0);
     localShiftsY.clear();
     localShiftsY.resize(frames.size() * PARTITION_AXIS_COUNT * PARTITION_AXIS_COUNT, 0.0);
+    std::cout << "Estimating local shifts" << std::endl;
     estimateLocalShifts(partitions, localShiftsX, localShiftsY);
 
     deformationCoefficientsX.clear();
     deformationCoefficientsX.resize(9, 0.0);
     deformationCoefficientsY.clear();
     deformationCoefficientsY.resize(9, 0.0);
+    std::cout << "Calculating deformation model coefficients" << std::endl;
     calculateModelCoefficients(localShiftsX, timeStamps,
             deformationCoefficientsX, frames[0].ydim, frames[0].xdim);
     calculateModelCoefficients(localShiftsY, timeStamps,
@@ -127,20 +128,22 @@ void ProgMovieAlignmentDeformationModel::run()
         correctedFrames[i].initZeros(frames[0]);
         correctedFrames[i].setXmippOrigin();
     }
-    for (int i = 0; i < frames.size(); i++) {
-        frames[i].setXmippOrigin();
-    }
+
+    std::cout << "Applying local motion correction" << std::endl;
     motionCorrect(frames, correctedFrames, timeStamps, deformationCoefficientsX,
             deformationCoefficientsY, upScaling);
 
+    std::cout << "Frame averaging" << std::endl;
     averageFrames(frames, correctedMicrograph);
 
     //save partials
-    //for (int i = 0; i < frames.size(); i++) {
-        //FileName fn = "/home/fonadius/Downloads/" + std::to_string(i) + ".jpg";
-        //saveMicrograph(fn, frames[i]);
-    //}
+    std::cout << "Saving partial results" << std::endl;
+    for (int i = 0; i < frames.size(); i++) {
+        FileName fn = "/scratch/workdir/" + std::to_string(i) + ".jpg";
+        saveMicrograph(fn, frames[i]);
+    }
 
+    std::cout << "Saving end result" << std::endl;
     saveMicrograph(fnMicrograph, correctedMicrograph);
 }
 
@@ -285,13 +288,12 @@ void ProgMovieAlignmentDeformationModel::partitionFrames(
         int partX = i % edgeCount;
         int xSize = partSizeX + (partX < xReminder ? 1 : 0);
         int ySize = partSizeY + (partY < yReminder ? 1 : 0);
-        for (int j = 0; j < partitions[i].size(); i++) {
+        for (int j = 0; j < partitions[i].size(); j++) {
             partitions[i][j].resize(1, 1, ySize, xSize);
             partitions[i][j].initZeros();
             partitions[i][j].setXmippOrigin();
         }
     }
-
 
     int longerPartY = yReminder * (partSizeY + 1);
     int longerPartX = xReminder * (partSizeX + 1);
