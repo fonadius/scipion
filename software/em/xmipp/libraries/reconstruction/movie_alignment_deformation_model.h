@@ -65,8 +65,8 @@ private:
 	std::vector<double> localShiftsY;
 	std::vector<std::vector<MultidimArray<double> > > partitions;
 
-	std::vector<double> deformationCoefficientsX;
-	std::vector<double> deformationCoefficientsY;
+    alglib::real_1d_array deformationCoeffsX;
+    alglib::real_1d_array deformationCoeffsY;
 
 	std::vector<MultidimArray<double> > correctedFrames;
 
@@ -83,49 +83,47 @@ private:
 	void loadMovie(FileName fnMovie,
             std::vector<MultidimArray<double> >& frames,
             std::vector<double>& timeStamps, FileName fnDark, FileName fnGain);
-	void saveMicrograph(FileName fnMicrograph,
-            const MultidimArray<double>& micrograph);
 
 	void estimateShifts(const std::vector<MultidimArray<double> >& data,
             std::vector<double>& shiftsX, std::vector<double>& shiftsY,
             int maxIterations);
-	static void calculateShift2(const alglib::real_1d_array &c,
-            const alglib::real_1d_array &dim, double &func, void *ptr);
-	double calculateShift(double x, double y, double t,
-            const std::vector<double>& c);
-	void applyShifts(std::vector<MultidimArray<double> >& data,
-            const std::vector<double>& shiftsX,
-            const std::vector<double>& shiftsY);
-
-	double linearInterpolation(double y1, double x1, double y2, double x2,
-            double v11, double v12, double v21, double v22, double p_y,
-            double p_x);
-	void partitionFrames(const std::vector<MultidimArray<double> >& frames,
-			std::vector<std::vector<MultidimArray<double> > >& partitions,
-            int edgeCount);
-	void downsampleFrame(MultidimArray<double>& in, MultidimArray<double>& out,
-            int scalingFactor);
 	void estimateLocalShifts(
             const std::vector<std::vector<MultidimArray<double> > >& partitions,
 			std::vector<double>& shiftsX, std::vector<double>& shiftsY,
             int maxIterations);
+	void applyShifts(std::vector<MultidimArray<double> >& data,
+            const std::vector<double>& shiftsX,
+            const std::vector<double>& shiftsY);
+
+	void partitionFrames(const std::vector<MultidimArray<double> >& frames,
+			std::vector<std::vector<MultidimArray<double> > >& partitions,
+            int edgeCount);
+	void calculatePartitionSize(int partIndex, int edgeCount, int frameHeight,
+            int frameWidth, int& partXSize, int& partYSize);
+
 	void calculateModelCoefficients(const std::vector<double>& shifts,
-            const std::vector<double>& timeStamps, std::vector<double>& coeffs,
-            int frameHeight, int frameWidth);
-	void motionCorrect(const std::vector<MultidimArray<double> >& input,
+            const std::vector<double>& timeStamps,
+            alglib::real_1d_array& coeffs, int frameHeight, int frameWidth);
+	static double pixelShift(double x, double y, double t,
+            const alglib::real_1d_array& c);
+	static void pixelShiftAlg(const alglib::real_1d_array &c,
+            const alglib::real_1d_array &dim, double &func, void *ptr);
+
+	void motionCorrect(std::vector<MultidimArray<double> >& input,
             std::vector<MultidimArray<double> >& output,
             const std::vector<double>& timeStamps,
-            const std::vector<double>& cx, const std::vector<double>& cy,
-            int upScaling);
-	void applyDeformation(const MultidimArray<double>& input,
-            MultidimArray<double>& output, const std::vector<double>& cx,
-            const std::vector<double>& cy, double t1, double t2, 
-            int scalingFactor);
+            const alglib::real_1d_array& cx, const alglib::real_1d_array& cy,
+            int scaling);
+	void revertDeformation(MultidimArray<double>& input,
+            MultidimArray<double>& output, const alglib::real_1d_array& cx,
+            const alglib::real_1d_array& cy, double t, int scalingFactor);
+	void downsampleFrame(MultidimArray<double>& input,
+            MultidimArray<double>& output, int scalingFactor);
 
 	void averageFrames(const std::vector<MultidimArray<double> >& data,
             MultidimArray<double>& out);
-	void calculatePartitionSize(int partIndex, int edgeCount, int frameHeight,
-            int frameWidth, int& partXSize, int& partYSize);
+	void saveMicrograph(const FileName fnMicrograph,
+            const MultidimArray<double>& micrograph);
 };
 
 #endif

@@ -90,8 +90,8 @@ void ProgMovieAlignmentDeformationModel::run()
     localShiftsX.resize(imageCount * PARTITION_COUNT * PARTITION_COUNT);
     localShiftsY.resize(imageCount * PARTITION_COUNT * PARTITION_COUNT);
 
-    deformationCoefficientsX.resize(9);
-    deformationCoefficientsY.resize(9);
+    deformationCoeffsX.setlength(9);
+    deformationCoeffsY.setlength(9);
 
     correctedFrames.resize(imageCount, MultidimArray<double>(frames[0].ydim,
                                                             frames[0].xdim));
@@ -110,6 +110,11 @@ void ProgMovieAlignmentDeformationModel::run()
     std::cout << "Applying global shifts" << std::endl;
     applyShifts(frames, globalShiftsX, globalShiftsY);
 
+    for (int i = 0; i < frames.size(); i++) {
+        saveMicrograph("/home/fonadius/Downloads/Glob" + std::to_string(i) + ".jpg",
+                frames[i]);
+    }
+
     std::cout << "Partitioning" << std::endl;
     partitionFrames(frames, partitions, PARTITION_COUNT);
     std::cout << "Estimating local shifts" << std::endl;
@@ -117,13 +122,18 @@ void ProgMovieAlignmentDeformationModel::run()
     
     std::cout << "Estimating deformation model coefficients" << std::endl;
     calculateModelCoefficients(localShiftsX, timeStamps,
-            deformationCoefficientsX, frames[0].ydim, frames[0].xdim);
+            deformationCoeffsX, frames[0].ydim, frames[0].xdim);
     calculateModelCoefficients(localShiftsY, timeStamps,
-            deformationCoefficientsY, frames[0].ydim, frames[0].xdim);
+            deformationCoeffsY, frames[0].ydim, frames[0].xdim);
 
     std::cout << "Applying local motion correction" << std::endl;
-    motionCorrect(frames, correctedFrames, timeStamps, deformationCoefficientsX,
-            deformationCoefficientsY, upScaling);
+    motionCorrect(frames, correctedFrames, timeStamps, deformationCoeffsX,
+            deformationCoeffsY, upScaling);
+
+    //for (int i = 0; i < correctedFrames.size(); i++) {
+        //saveMicrograph("/home/fonadius/Downloads/Corr" + std::to_string(i) + ".jpg",
+                //correctedFrames[i]);
+    //}
 
     std::cout << "Saving resulting average" << std::endl;
     averageFrames(correctedFrames, correctedMicrograph);
@@ -177,26 +187,25 @@ void ProgMovieAlignmentDeformationModel::loadMovie(FileName fnMovie,
     }
 }
 
-void ProgMovieAlignmentDeformationModel::saveMicrograph(FileName fnMicrograph,
-        const MultidimArray<double>& micrograph)
+void ProgMovieAlignmentDeformationModel::saveMicrograph(
+        const FileName fnMicrograph, const MultidimArray<double>& micrograph)
 {
 	Image<double> img(micrograph);
 	img.write(fnMicrograph);
 }
 
-void ProgMovieAlignmentDeformationModel::calculateShift2(
+void ProgMovieAlignmentDeformationModel::pixelShiftAlg(
         const alglib::real_1d_array &c, const alglib::real_1d_array &dim,
         double &func, void *ptr)
 {
 	double y = dim[0];
 	double x = dim[1];
 	double t = dim[2];
-	func = (c[0] + c[1]*x + c[2]*x*x + c[3]*y + c[4]*y*y + c[5]*x*y) *
-			(c[6]*t + c[7]*t*t + c[8]*t*t*t);
+    func = pixelShift(x, y, t, c);
 }
 
-double ProgMovieAlignmentDeformationModel::calculateShift(double x, double y, 
-        double t, const std::vector<double>& c)
+double ProgMovieAlignmentDeformationModel::pixelShift(double x, double y, 
+        double t, const alglib::real_1d_array& c)
 {
     return (c[0] + c[1]*x + c[2]*x*x + c[3]*y + c[4]*y*y + c[5]*x*y) * 
     		(c[6]*t + c[7]*t*t + c[8]*t*t*t);
@@ -206,49 +215,10 @@ void ProgMovieAlignmentDeformationModel::applyShifts(
         std::vector<MultidimArray<double> >& data,
         const std::vector<double>& shiftsX, const std::vector<double>& shiftsY)
 {
-
 	for (int i = 0; i < data.size(); i++) {
 		selfTranslate(BSPLINE3, data[i], vectorR2(shiftsX[i], shiftsY[i]),
                 false, 0.0);
 	}
-}
-
-double ProgMovieAlignmentDeformationModel::linearInterpolation(double y1,
-        double x1, double y2, double x2, double v11, double v12, double v21,
-        double v22, double p_y, double p_x)
-{
-	double p1, p2, p;
-    // x interpolation
-    if (x1 == x2)
-    {
-        p1 = v11;
-        p2 = v21;
-    }
-    else 
-    {
-        double diffx = (x2 - x1);
-        double rat1 = (x2 - p_x) / diffx;
-        double rat2 = (p_x - x1) / diffx;
-
-        p1 = v11 * rat1 + v12 * rat2;
-        p2 = v21 * rat1 + v22 * rat2;
-    }
-
-    // y interpolation
-    if (y1 == y2)
-    {
-        p = p1;
-    }
-    else
-    {
-        double diffy = (y2 - y1);
-        double rat1 = (y2 - p_y) / diffy;
-        double rat2 = (p_y - y1) / diffy;
-
-        p = p1 * rat1 + p2 * rat2;
-    }
-
-    return p;
 }
 
 void ProgMovieAlignmentDeformationModel::partitionFrames(
@@ -366,13 +336,11 @@ void ProgMovieAlignmentDeformationModel::estimateLocalShifts(
 
 void ProgMovieAlignmentDeformationModel::calculateModelCoefficients(
         const std::vector<double>& shifts,
-        const std::vector<double>& timeStamps, std::vector<double>& coeffs,
+        const std::vector<double>& timeStamps, alglib::real_1d_array& c,
         int frameHeight, int frameWidth)
 {
-	alglib::real_1d_array c;
-	c.setlength(coeffs.size());
 	for (size_t i = 0; i < c.length(); i++) {
-		c[i] = 0.05;
+		c[i] = 0.05;  // define initial guess
 	}
 
 	alglib::real_1d_array y;
@@ -381,11 +349,9 @@ void ProgMovieAlignmentDeformationModel::calculateModelCoefficients(
 		y[i] = shifts[i];
 	}
 
-
 	alglib::real_2d_array positions;
 	positions.setlength(shifts.size(), 3);
 	int partsInFrame = PARTITION_COUNT * PARTITION_COUNT;
-    int curFrame = -1;
     double cummulativeX, cummulativeY;
     int partSizeX, partSizeY;
 	for (size_t i = 0; i < positions.rows(); i++) {
@@ -398,7 +364,6 @@ void ProgMovieAlignmentDeformationModel::calculateModelCoefficients(
             cummulativeX = 0;
             cummulativeY += partSizeY;
         }
-
         calculatePartitionSize(partIndex, PARTITION_COUNT, frameHeight,
                 frameWidth, partSizeX, partSizeY);
 
@@ -409,7 +374,6 @@ void ProgMovieAlignmentDeformationModel::calculateModelCoefficients(
         cummulativeX += partSizeX;
 	}
 
-
     alglib::ae_int_t info;
     alglib::lsfitstate state;
     alglib::lsfitreport rep;
@@ -418,56 +382,52 @@ void ProgMovieAlignmentDeformationModel::calculateModelCoefficients(
     alglib::ae_int_t maxits = 0;
     double diffstep = 0.000001;
 
-
     alglib::lsfitcreatef(positions, y, c, diffstep, state);
     alglib::lsfitsetcond(state, epsf, epsx, maxits);
-    alglib::lsfitfit(state, calculateShift2);
+    alglib::lsfitfit(state, pixelShiftAlg);
     alglib::lsfitresults(state, info, c, rep);
-
-    for (size_t i = 0; i < c.length(); i++) {
-    	coeffs[i] = c[i];
-    }
+    //TODO: check state and saner default values
 }
 
 void ProgMovieAlignmentDeformationModel::motionCorrect(
-        const std::vector<MultidimArray<double> >& input,
+        std::vector<MultidimArray<double> >& input,
 		std::vector<MultidimArray<double> >& output,
-        const std::vector<double>& timeStamps, const std::vector<double>& cx,
-        const std::vector<double>& cy, int scalingFactor)
+        const std::vector<double>& timeStamps, const alglib::real_1d_array& cx,
+        const alglib::real_1d_array& cy, int scaling)
 {
-    MultidimArray<double> helper(input[0].ydim * scalingFactor,
-            input[0].xdim * scalingFactor);
-    helper.resize(input[0].ydim * scalingFactor, input[0].xdim * scalingFactor);
-    helper.setXmippOrigin();
+    MultidimArray<double> tmp(input[0].ydim * scaling, input[0].xdim * scaling);
+    tmp.setXmippOrigin();
 	for (int i = 0; i < input.size(); i++) {
-        output[i].setXmippOrigin();
-        if (scalingFactor != 1) {
-    		applyDeformation(input[i], helper, cx, cy, timeStamps[i], 0,
-                    scalingFactor);
-            downsampleFrame(helper, output[i], scalingFactor);
-        } else {
-            applyDeformation(input[i], output[i], cx, cy, timeStamps[i], 0,
-                    scalingFactor);
-        }
+    		revertDeformation(input[i], tmp, cx, cy, timeStamps[i], scaling);
+            saveMicrograph("/home/fonadius/Downloads/Corr" + std::to_string(i) + ".jpg",
+                    tmp);
+            downsampleFrame(tmp, output[i], scaling);
     }
 }
 
 void ProgMovieAlignmentDeformationModel::downsampleFrame(
-        MultidimArray<double>& in, MultidimArray<double>& out,
+        MultidimArray<double>& input, MultidimArray<double>& output,
         int scalingFactor)
 {
-    int nThreads = 5;
+    if (scalingFactor == 1) {
+        FOR_ALL_DIRECT_ELEMENTS_IN_ARRAY2D(input) {
+            dAij(output, i, j) = dAij(input, i, j);
+        }
+        return;
+    }
+    std::cout << "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" << std::endl;
+    //TODO: Finish Downscaling
     double omin=0.,omax=0.;
-    in.computeDoubleMinMax(omin,omax);
+    input.computeDoubleMinMax(omin,omax);
 
     FourierTransformer trInput;
-    trInput.setThreadsNumber(nThreads);
+    trInput.setThreadsNumber(threadNumbers);
     MultidimArray<std::complex<double> > inputReciprocal;
-    trInput.FourierTransform(in, inputReciprocal, false);
+    trInput.FourierTransform(input, inputReciprocal, false);
 
     FourierTransformer trResult;
-    trResult.setThreadsNumber(nThreads);
-    trResult.setReal(out);
+    trResult.setThreadsNumber(threadNumbers);
+    trResult.setReal(output);
     //TODO: is it calculated??
     MultidimArray<std::complex<double> > resultReciprocal;
     trResult.getFourierAlias(resultReciprocal);
@@ -479,49 +439,33 @@ void ProgMovieAlignmentDeformationModel::downsampleFrame(
         }
     }
     trResult.inverseFourierTransform();
-    out.rangeAdjust(omin, omax);
+    output.rangeAdjust(omin, omax);
 }
 
-void ProgMovieAlignmentDeformationModel::applyDeformation(
-        const MultidimArray<double>& input, MultidimArray<double>& output,
-        const std::vector<double>& cx, const std::vector<double>& cy,
-		double t1, double t2, int scalingFactor)
-{
-    int maxX = input.xdim;
-    int maxY = input.ydim;
-    FOR_ALL_DIRECT_ELEMENTS_IN_ARRAY2D(output)
+void ProgMovieAlignmentDeformationModel::revertDeformation(
+        MultidimArray<double>& input, MultidimArray<double>& output,
+        const alglib::real_1d_array& cx, const alglib::real_1d_array& cy,
+		double t, int scalingFactor)
+{   
+    input.setXmippOrigin();
+    output.setXmippOrigin();
+    FOR_ALL_ELEMENTS_IN_ARRAY2D(output)
     {
         int y = i;
         int x = j;
 
-        int realY = floor(y / scalingFactor);
-        int realX = floor(x / scalingFactor);
+        int nonScaledY = y / scalingFactor;
+        int nonScaledX = x / scalingFactor;
 
-        double posy = (y + calculateShift(realX, realY, t2, cy) -
-                calculateShift(realX, realY, t1, cy));
-        double posx = (x + calculateShift(realX, realY, t2, cx) -
-                calculateShift(realX, realY, t1, cx));
+        double posy = nonScaledY - pixelShift(nonScaledX, nonScaledY, t, cy);
+        double posx = nonScaledX - pixelShift(nonScaledX, nonScaledY, t, cx);
 
-        int x_left = floor(posx);
-        int x_right = x_left + 1;
-        int y_down = floor(posy);
-        int y_up = y_down + 1;
-        //TODO: scaling
-        double val;
-        if ((x_right < 0 or x_right >= maxX) or (x_left < 0 or x_left >= maxX)
-                or (y_up < 0 or y_up >=maxY) or (y_down < 0 or y_down >= maxY)) {
-            val = 0;
-        } else {
-            double v11 = dAij(input, y_down, x_left);
-            double v12 = dAij(input, y_down, x_right);
-            double v21 = dAij(input, y_up, x_left);
-            double v22 = dAij(input, y_up, x_right);
-            val = linearInterpolation(y_down, x_left, y_up, x_right, v11, v12,
-                    v21, v22, posy, posx);
-        }
+        double val = input.interpolatedElement2DOutsideZero(posx, posy);
 
-        DIRECT_A2D_ELEM(output, i, j) = val;
-    }	
+        output(y, x) = val;
+    }
+    input.resetOrigin();
+    output.resetOrigin();
 }
 
 void ProgMovieAlignmentDeformationModel::averageFrames(
