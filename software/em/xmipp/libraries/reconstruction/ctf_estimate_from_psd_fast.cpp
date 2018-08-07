@@ -1123,7 +1123,7 @@ void ProgCTFEstimateFromPSDFast::estimate_defoci_fast()
 		FourierTransformer FourierPSD;
 		FourierPSD.FourierTransform(psd_exp_radial2, psd_fft, false);
 
-		int startIndex = 7; //avoid low frequencies
+		int startIndex = 3; //avoid low frequencies
 		FOR_ALL_ELEMENTS_IN_ARRAY1D(psd_fft)
 		{
 			if(i>=startIndex)
