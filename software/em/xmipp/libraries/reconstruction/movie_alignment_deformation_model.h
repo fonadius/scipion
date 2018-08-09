@@ -68,8 +68,6 @@ private:
     alglib::real_1d_array deformationCoeffsX;
     alglib::real_1d_array deformationCoeffsY;
 
-	MultidimArray<double> correctedMicrograph;
-
 	const static int PARTITION_COUNT = 5;	//partition count on each axis 
 public:
     void readParams();

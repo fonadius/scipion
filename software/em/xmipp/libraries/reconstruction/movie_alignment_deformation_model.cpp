@@ -132,12 +132,13 @@ void ProgMovieAlignmentDeformationModel::run()
             deformationCoeffsY, frames[0].ydim, frames[0].xdim);
 
     std::cout << "Applying local motion correction" << std::endl;
-    motionCorrect(frames, correctedFrames, timeStamps, deformationCoeffsX,
-            deformationCoeffsY, upScaling);
+    motionCorrect(frames, timeStamps, deformationCoeffsX, deformationCoeffsY,
+            upScaling);
 
     std::cout << "Saving resulting average" << std::endl;
-    averageFrames(correctedFrames, correctedMicrograph);
-    saveMicrograph(fnMicrograph, correctedMicrograph);
+    MultidimArray<double> result;
+    averageFrames(frames, result);
+    saveMicrograph(fnMicrograph, result);
 }
 
 void ProgMovieAlignmentDeformationModel::loadMovie(FileName fnMovie,
@@ -409,7 +410,8 @@ void ProgMovieAlignmentDeformationModel::motionCorrect(
     		revertDeformation(data[i], tmp, cx, cy, timeStamps[i], scaling);
             saveMicrograph("/scratch/workdir/" + std::to_string(i) + ".jpg",
                     tmp);
-            scaleToSize(3, data[i], tmp, origWidth, origHeight);
+            scaleToSize(BSPLINE3, data[i], tmp, origWidth, origHeight);
+            tmp.copy(data[i]);
     }
 }
 
