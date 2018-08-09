@@ -68,10 +68,7 @@ private:
     alglib::real_1d_array deformationCoeffsX;
     alglib::real_1d_array deformationCoeffsY;
 
-	std::vector<MultidimArray<double> > correctedFrames;
-
 	MultidimArray<double> correctedMicrograph;
-	MultidimArray<double> unalignedMicrograph;
 
 	const static int PARTITION_COUNT = 5;	//partition count on each axis 
 public:
@@ -109,16 +106,13 @@ private:
 	static void pixelShiftAlg(const alglib::real_1d_array &c,
             const alglib::real_1d_array &dim, double &func, void *ptr);
 
-	void motionCorrect(std::vector<MultidimArray<double> >& input,
-            std::vector<MultidimArray<double> >& output,
+	void motionCorrect(std::vector<MultidimArray<double> >& data,
             const std::vector<double>& timeStamps,
             const alglib::real_1d_array& cx, const alglib::real_1d_array& cy,
             int scaling);
 	void revertDeformation(MultidimArray<double>& input,
             MultidimArray<double>& output, const alglib::real_1d_array& cx,
             const alglib::real_1d_array& cy, double t, int scalingFactor);
-	void downsampleFrame(MultidimArray<double>& input,
-            MultidimArray<double>& output, int scalingFactor);
 
 	void averageFrames(const std::vector<MultidimArray<double> >& data,
             MultidimArray<double>& out);
