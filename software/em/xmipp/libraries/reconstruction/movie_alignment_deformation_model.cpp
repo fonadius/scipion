@@ -111,9 +111,13 @@ void ProgMovieAlignmentDeformationModel::run()
     applyShifts(frames, globalShiftsX, globalShiftsY);
 
     for (int i = 0; i < frames.size(); i++) {
-        saveMicrograph("/home/fonadius/Downloads/Glob" + std::to_string(i) + ".jpg",
+        saveMicrograph("/scratch/workdir/Glob" + std::to_string(i) + ".jpg",
                 frames[i]);
     }
+    MultidimArray<double> tmp;
+    averageFrames(frames, tmp);
+    saveMicrograph("/scratch/workdir/GlobalAligned.jpg",
+            tmp);
 
     std::cout << "Partitioning" << std::endl;
     partitionFrames(frames, partitions, PARTITION_COUNT);
@@ -130,10 +134,9 @@ void ProgMovieAlignmentDeformationModel::run()
     motionCorrect(frames, correctedFrames, timeStamps, deformationCoeffsX,
             deformationCoeffsY, upScaling);
 
-    //for (int i = 0; i < correctedFrames.size(); i++) {
-        //saveMicrograph("/home/fonadius/Downloads/Corr" + std::to_string(i) + ".jpg",
-                //correctedFrames[i]);
-    //}
+    std::cout << correctedFrames[0].xdim << ", " << correctedFrames[0].ydim <<
+        std::endl;
+    std::cout << frames[0].xdim << ", " << frames[0].ydim << std::endl;
 
     std::cout << "Saving resulting average" << std::endl;
     averageFrames(correctedFrames, correctedMicrograph);
@@ -247,11 +250,11 @@ void ProgMovieAlignmentDeformationModel::partitionFrames(
     int longerPartY = yReminder * (partSizeY + 1);
     int longerPartX = xReminder * (partSizeX + 1);
     for (int fi = 0; fi < frames.size(); fi++) {
-        FOR_ALL_DIRECT_NZYX_ELEMENTS_IN_MULTIDIMARRAY(frames[fi]) {
+        FOR_ALL_DIRECT_ELEMENTS_IN_ARRAY2D(frames[fi]) {
             int partY, partX; // index of the partition
             int innerY, innerX; // index inside the partition
             
-            if (i < longerPartY) { //in this part, partitions are longer along y
+            if (i < longerPartY) { // partitions are longer along y axis here
                 partY = i / (partSizeY + 1);
                 innerY = i % (partSizeY + 1);
             } else {
@@ -259,7 +262,7 @@ void ProgMovieAlignmentDeformationModel::partitionFrames(
                 innerY = (i - longerPartY) % partSizeY;
             }
 
-            if (j < longerPartX) { //in this part, partitions are longer along x
+            if (j < longerPartX) { // partitions are longer along x axis here
                 partX = j / (partSizeX + 1);
                 innerX = j % (partSizeX + 1);
             } else {
@@ -395,51 +398,15 @@ void ProgMovieAlignmentDeformationModel::motionCorrect(
         const std::vector<double>& timeStamps, const alglib::real_1d_array& cx,
         const alglib::real_1d_array& cy, int scaling)
 {
-    MultidimArray<double> tmp(input[0].ydim * scaling, input[0].xdim * scaling);
-    tmp.setXmippOrigin();
+    int origWidth = input[0].xdim;
+    int origHeight = input[0].ydim;
+    MultidimArray<double> tmp(origHeight * scaling, origWidth * scaling);
 	for (int i = 0; i < input.size(); i++) {
     		revertDeformation(input[i], tmp, cx, cy, timeStamps[i], scaling);
-            saveMicrograph("/home/fonadius/Downloads/Corr" + std::to_string(i) + ".jpg",
+            saveMicrograph("/scratch/workdir/" + std::to_string(i) + ".jpg",
                     tmp);
-            downsampleFrame(tmp, output[i], scaling);
+            scaleToSize(3, output[i], tmp, origWidth, origHeight);
     }
-}
-
-void ProgMovieAlignmentDeformationModel::downsampleFrame(
-        MultidimArray<double>& input, MultidimArray<double>& output,
-        int scalingFactor)
-{
-    if (scalingFactor == 1) {
-        FOR_ALL_DIRECT_ELEMENTS_IN_ARRAY2D(input) {
-            dAij(output, i, j) = dAij(input, i, j);
-        }
-        return;
-    }
-    std::cout << "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" << std::endl;
-    //TODO: Finish Downscaling
-    double omin=0.,omax=0.;
-    input.computeDoubleMinMax(omin,omax);
-
-    FourierTransformer trInput;
-    trInput.setThreadsNumber(threadNumbers);
-    MultidimArray<std::complex<double> > inputReciprocal;
-    trInput.FourierTransform(input, inputReciprocal, false);
-
-    FourierTransformer trResult;
-    trResult.setThreadsNumber(threadNumbers);
-    trResult.setReal(output);
-    //TODO: is it calculated??
-    MultidimArray<std::complex<double> > resultReciprocal;
-    trResult.getFourierAlias(resultReciprocal);
-
-    for (int i = 0; i < resultReciprocal.ydim; i++) {
-        for (int j = 0; j < resultReciprocal.xdim; j++) {
-            dAij(resultReciprocal, i, j) = dAij(inputReciprocal,
-                    i*scalingFactor, j*scalingFactor);
-        }
-    }
-    trResult.inverseFourierTransform();
-    output.rangeAdjust(omin, omax);
 }
 
 void ProgMovieAlignmentDeformationModel::revertDeformation(
@@ -447,9 +414,9 @@ void ProgMovieAlignmentDeformationModel::revertDeformation(
         const alglib::real_1d_array& cx, const alglib::real_1d_array& cy,
 		double t, int scalingFactor)
 {   
-    input.setXmippOrigin();
-    output.setXmippOrigin();
-    FOR_ALL_ELEMENTS_IN_ARRAY2D(output)
+    input.resetOrigin();
+    output.resetOrigin();
+    FOR_ALL_DIRECT_ELEMENTS_IN_ARRAY2D(output)
     {
         int y = i;
         int x = j;
@@ -457,15 +424,14 @@ void ProgMovieAlignmentDeformationModel::revertDeformation(
         int nonScaledY = y / scalingFactor;
         int nonScaledX = x / scalingFactor;
 
-        double posy = nonScaledY - pixelShift(nonScaledX, nonScaledY, t, cy);
-        double posx = nonScaledX - pixelShift(nonScaledX, nonScaledY, t, cx);
+        double posy = nonScaledY + pixelShift(nonScaledX, nonScaledY, t, cy);
+        double posx = nonScaledX + pixelShift(nonScaledX, nonScaledY, t, cx);
 
         double val = input.interpolatedElement2DOutsideZero(posx, posy);
-
-        output(y, x) = val;
+        dAij(output, y, x) = val;
     }
-    input.resetOrigin();
-    output.resetOrigin();
+    //input.resetOrigin();
+    //output.resetOrigin();
 }
 
 void ProgMovieAlignmentDeformationModel::averageFrames(
