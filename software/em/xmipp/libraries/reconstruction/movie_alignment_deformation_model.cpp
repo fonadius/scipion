@@ -111,13 +111,13 @@ void ProgMovieAlignmentDeformationModel::run()
     std::cout << "Applying global shifts" << std::endl;
     applyShifts(frames, globalShiftsX, globalShiftsY);
 
-    for (int i = 0; i < frames.size(); i++) {
-        saveMicrograph("/scratch/workdir/Glob" + std::to_string(i) + ".jpg",
-                frames[i]);
-    }
-    MultidimArray<double> tmp;
-    averageFrames(frames, tmp);
-    saveMicrograph("/scratch/workdir/GlobalAligned.jpg",
+    //for (int i = 0; i < frames.size(); i++) {
+     //   saveMicrograph("/scratch/workdir/Glob" + std::to_string(i) + ".jpg",
+   //             frames[i]);
+   // }
+   // MultidimArray<double> tmp;
+   // averageFrames(frames, tmp);
+   // saveMicrograph("/scratch/workdir/GlobalAligned.jpg",
             tmp);
 
     std::cout << "Partitioning" << std::endl;
@@ -408,8 +408,8 @@ void ProgMovieAlignmentDeformationModel::motionCorrect(
     MultidimArray<double> tmp(origHeight * scaling, origWidth * scaling);
 	for (int i = 0; i < data.size(); i++) {
     		revertDeformation(data[i], tmp, cx, cy, timeStamps[i], scaling);
-            saveMicrograph("/scratch/workdir/" + std::to_string(i) + ".jpg",
-                    tmp);
+            //saveMicrograph("/scratch/workdir/" + std::to_string(i) + ".jpg",
+            //        tmp);
             scaleToSize(BSPLINE3, data[i], tmp, origWidth, origHeight);
             tmp.copy(data[i]);
     }
