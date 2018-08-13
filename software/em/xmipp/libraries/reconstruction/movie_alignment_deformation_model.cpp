@@ -93,12 +93,6 @@ void ProgMovieAlignmentDeformationModel::run()
     deformationCoeffsX.setlength(9);
     deformationCoeffsY.setlength(9);
 
-    correctedFrames.resize(imageCount, MultidimArray<double>(frames[0].ydim,
-                                                            frames[0].xdim));
-    for (int i = 0; i < correctedFrames.size(); i++) {
-        correctedFrames[i].setXmippOrigin();
-    }
-
     // --Calculations
     if (!fnUnaligned.isEmpty()) {  // save unaligned average (if selected)
         MultidimArray<double> unalignedMicrograph;
@@ -151,6 +145,11 @@ void ProgMovieAlignmentDeformationModel::loadMovie(FileName fnMovie,
     }
     if (not fnGain.isEmpty()) {
         gain.read(fnGain);
+        gain() = 1.0 / gain();
+        double avg = gain().computeAvg();
+        if (std::isinf(avg) || std::isnan(avg))
+            REPORT_ERROR(ERR_ARG_INCORRECT,
+                "The input gain image is incorrect, its inverse produces infinite or nan");
     }
 
     Image<double> movieStack;
@@ -175,7 +174,6 @@ void ProgMovieAlignmentDeformationModel::loadMovie(FileName fnMovie,
                                                                 z, 0, i, j);
             }
         }
-        frames[z].setXmippOrigin();
 
         if (dark().xdim > 0) {
             frames[z] -= dark();
@@ -183,6 +181,7 @@ void ProgMovieAlignmentDeformationModel::loadMovie(FileName fnMovie,
         if (gain().xdim > 0) {
             frames[z] *= gain();
         }
+        frames[z].setXmippOrigin();
 
         timeStamps.push_back(initDose + perFrameDose * z);
     }
@@ -209,6 +208,7 @@ void ProgMovieAlignmentDeformationModel::estimateShifts(
     CorrelationAux aux;
     for (int cycle = 0; cycle < maxIterations; cycle++) {
         std::cout << "Cycle: " << cycle << std::endl;
+        double maxShift = 0;
         for (int i = 0; i < data.size(); i++) {
             sum -= shiftedData[i];
             //sum = sum / (data.size() - 1);
@@ -216,8 +216,18 @@ void ProgMovieAlignmentDeformationModel::estimateShifts(
             //sum = sum * (data.size() - 1);
             sum += shiftedData[i];
 
+            double maxAxis = std::max(std::abs(shiftsY[i] - shiftY),
+                                      std::abs(shiftsX[i] - shiftX));
+            maxShift = std::max(maxAxis, maxShift);
+
             shiftsY[i] = shiftY;
             shiftsX[i] = shiftX;
+        }
+
+        if (maxShift <= maxShiftTreshold) {
+            // if further calculated shifts are only minimal end calculation
+            std::cout << "Shift threshold reached: " << maxShift << std::endl;
+            break;
         }
 
         // recalculate avrg
@@ -411,7 +421,6 @@ void ProgMovieAlignmentDeformationModel::motionCorrect(
             saveMicrograph("/scratch/workdir/" + std::to_string(i) + ".jpg",
                     tmp);
             scaleToSize(BSPLINE3, data[i], tmp, origWidth, origHeight);
-            tmp.copy(data[i]);
     }
 }
 
@@ -430,8 +439,8 @@ void ProgMovieAlignmentDeformationModel::revertDeformation(
         int nonScaledY = y / scalingFactor;
         int nonScaledX = x / scalingFactor;
 
-        double posy = nonScaledY + pixelShift(nonScaledX, nonScaledY, t, cy);
-        double posx = nonScaledX + pixelShift(nonScaledX, nonScaledY, t, cx);
+        double posy = nonScaledY - pixelShift(nonScaledX, nonScaledY, t, cy);
+        double posx = nonScaledX - pixelShift(nonScaledX, nonScaledY, t, cx);
 
         double val = input.interpolatedElement2DOutsideZero(posx, posy);
         dAij(output, y, x) = val;

@@ -31,6 +31,7 @@
 #include <alglib/src/stdafx.h>
 #include <float.h>
 #include <stdlib.h>
+#include <algorithm>
 #include "data/xmipp_program.h"
 #include "data/metadata_extension.h"
 #include "data/xmipp_fftw.h"
