@@ -35,6 +35,9 @@ void ProgMovieAlignmentDeformationModel::readParams()
     maxIterations = getIntParam("--maxIterations");
     upScaling = getIntParam("--upscaling");
     fnUnaligned = getParam("--ounaligned");
+    fnGlobAligned = getParam("--oGlobAligned");
+    fnGlobFrames = getParam("--oGlobFrames");
+    fnOutFrames = getParam("--oCorrFrames");
     threadNumbers = getIntParam("-j");
     fnDark = getParam("--dark");
     fnGain = getParam("--gain");
@@ -53,6 +56,9 @@ void ProgMovieAlignmentDeformationModel::show()
     << "Max iterations:       " << maxIterations     << std::endl
     << "Up scaling coef.:     " << upScaling         << std::endl
 	<< "Unaligned micrograph: " << fnUnaligned       << std::endl
+    << "Globally aligned:     " << fnGlobAligned     << std::endl
+    << "Globally corr. frames:" << fnGlobFrames      << std::endl
+    << "Corrected frames:     " << fnOutFrames       << std::endl
     << "Threads number:       " << threadNumbers     << std::endl
     << "Dark image:           " << fnDark            << std::endl
     << "Gain image:           " << fnGain            << std::endl;
@@ -68,6 +74,9 @@ void ProgMovieAlignmentDeformationModel::defineParams()
     addParamsLine("  [--maxIterations <s=20>]	  : Number of robust least squares iterations");
     addParamsLine("  [--upscaling <N=1>]          : UpScaling coefficient for super resolution image generated from model application");
     addParamsLine("  [--ounaligned <fn=\"\">]     : Give the name of a micrograph to generate an unaligned (initial) micrograph");
+    addParamsLine("  [--oGlobAligned <fn=\"\">]   : Path to micrograph calculated from frames after just global correction");
+    addParamsLine("  [--oGlobFrames <fn=\"\">]    : Where to save individual frames after global alignment");
+    addParamsLine("  [--oCorrFrames <fn=\"\">]    : Where to save individual motion corrected frames");
     addParamsLine("  [-j <N=5>]                   : Maximum threads the program is allowed to use");
     addParamsLine("  [--dark <fn=\"\">]           : Dark correction image");
     addParamsLine("  [--gain <fn=\"\">]           : Gain correction image");
@@ -93,6 +102,8 @@ void ProgMovieAlignmentDeformationModel::run()
     deformationCoeffsX.setlength(9);
     deformationCoeffsY.setlength(9);
 
+    double MAX_SHIFT_THRESHOLD = 0.1;
+
     // --Calculations
     if (!fnUnaligned.isEmpty()) {  // save unaligned average (if selected)
         MultidimArray<double> unalignedMicrograph;
@@ -101,23 +112,31 @@ void ProgMovieAlignmentDeformationModel::run()
     }
 
     std::cout << "Estimating global shifts" << std::endl;
-    estimateShifts(frames, globalShiftsX, globalShiftsY, maxIterations);
+    estimateShifts(frames, globalShiftsX, globalShiftsY, maxIterations,
+            MAX_SHIFT_THRESHOLD);
     std::cout << "Applying global shifts" << std::endl;
     applyShifts(frames, globalShiftsX, globalShiftsY);
 
-    //for (int i = 0; i < frames.size(); i++) {
-     //   saveMicrograph("/scratch/workdir/Glob" + std::to_string(i) + ".jpg",
-   //             frames[i]);
-   // }
-   // MultidimArray<double> tmp;
-   // averageFrames(frames, tmp);
-   // saveMicrograph("/scratch/workdir/GlobalAligned.jpg",
-            tmp);
+    if (!fnGlobFrames.isEmpty()) { // save individual globally corrected frames
+        FileName fn;
+        for (size_t i = 0; i < frames.size(); i++) {
+            fn.compose(fnGlobFrames + "Glob", i + 1, "mrc");
+            std::cout << fn << std::endl;
+            saveMicrograph(fn, frames[i]);
+        }
+    }
+
+    if (!fnGlobAligned.isEmpty()) { // save globaly algined average
+        MultidimArray<double> tmp;
+        averageFrames(frames, tmp);
+        saveMicrograph(fnGlobAligned, tmp);
+    }
 
     std::cout << "Partitioning" << std::endl;
     partitionFrames(frames, partitions, PARTITION_COUNT);
     std::cout << "Estimating local shifts" << std::endl;
-    estimateLocalShifts(partitions, localShiftsX, localShiftsY, maxIterations);
+    estimateLocalShifts(partitions, localShiftsX, localShiftsY, maxIterations,
+            MAX_SHIFT_THRESHOLD);
     
     std::cout << "Estimating deformation model coefficients" << std::endl;
     calculateModelCoefficients(localShiftsX, timeStamps,
@@ -128,6 +147,15 @@ void ProgMovieAlignmentDeformationModel::run()
     std::cout << "Applying local motion correction" << std::endl;
     motionCorrect(frames, timeStamps, deformationCoeffsX, deformationCoeffsY,
             upScaling);
+
+    if (!fnOutFrames.isEmpty()) { // save individual corrected frames
+        FileName fn;
+        for (size_t i = 0; i < frames.size(); i++) {
+            fn.compose(fnOutFrames, i + 1, "mrc");
+            std::cout << fn << std::endl;
+            saveMicrograph(fn, frames[i]);
+        }
+    }
 
     std::cout << "Saving resulting average" << std::endl;
     MultidimArray<double> result;
@@ -147,9 +175,10 @@ void ProgMovieAlignmentDeformationModel::loadMovie(FileName fnMovie,
         gain.read(fnGain);
         gain() = 1.0 / gain();
         double avg = gain().computeAvg();
-        if (std::isinf(avg) || std::isnan(avg))
+        if (std::isinf(avg) || std::isnan(avg)) {
             REPORT_ERROR(ERR_ARG_INCORRECT,
                 "The input gain image is incorrect, its inverse produces infinite or nan");
+        }
     }
 
     Image<double> movieStack;
@@ -190,7 +219,7 @@ void ProgMovieAlignmentDeformationModel::loadMovie(FileName fnMovie,
 void ProgMovieAlignmentDeformationModel::estimateShifts(
         const std::vector<MultidimArray<double> >& data,
 		std::vector<double>& shiftsX, std::vector<double>& shiftsY,
-        int maxIterations)
+        int maxIterations, double maxShiftThreshold)
 {
 	// prepare sum of images
     MultidimArray<double> sum;
@@ -207,7 +236,7 @@ void ProgMovieAlignmentDeformationModel::estimateShifts(
     double shiftX, shiftY;
     CorrelationAux aux;
     for (int cycle = 0; cycle < maxIterations; cycle++) {
-        std::cout << "Cycle: " << cycle << std::endl;
+        std::cout << "Cycle: " << cycle;
         double maxShift = 0;
         for (int i = 0; i < data.size(); i++) {
             sum -= shiftedData[i];
@@ -224,7 +253,7 @@ void ProgMovieAlignmentDeformationModel::estimateShifts(
             shiftsX[i] = shiftX;
         }
 
-        if (maxShift <= maxShiftTreshold) {
+        if (maxShift <= maxShiftThreshold) {
             // if further calculated shifts are only minimal end calculation
             std::cout << "Shift threshold reached: " << maxShift << std::endl;
             break;
@@ -236,13 +265,14 @@ void ProgMovieAlignmentDeformationModel::estimateShifts(
                     vectorR2(shiftsX[i], shiftsY[i]), false, 0.0);
         }
         averageFrames(shiftedData, sum);
+        std::cout << " .... " << maxShift << std::endl;
     }
 }
 
 void ProgMovieAlignmentDeformationModel::estimateLocalShifts(
         const std::vector<std::vector<MultidimArray<double> > >& partitions,
         std::vector<double>& shiftsX, std::vector<double>& shiftsY,
-        int maxIterations)
+        int maxIterations, double maxShiftThreshold)
 {
     //shiftsX and shiftsY contains shifts for all partitions []
     //shifts are organized 
@@ -253,7 +283,8 @@ void ProgMovieAlignmentDeformationModel::estimateLocalShifts(
     for (int i = 0; i < partitions.size(); i++) {
         std::cout << "Local movement estimation for partition " << i
             << std::endl;
-        estimateShifts(partitions[i], tmpXShifts, tmpYShifts, maxIterations);
+        estimateShifts(partitions[i], tmpXShifts, tmpYShifts, maxIterations,
+                maxShiftThreshold);
         for (int j = 0; j < partDepth; j++) {
         	shiftsX[i + j*partsPerFrame] = tmpXShifts[j];
         	shiftsY[i + j*partsPerFrame] = tmpYShifts[j];
@@ -418,8 +449,6 @@ void ProgMovieAlignmentDeformationModel::motionCorrect(
     MultidimArray<double> tmp(origHeight * scaling, origWidth * scaling);
 	for (int i = 0; i < data.size(); i++) {
     		revertDeformation(data[i], tmp, cx, cy, timeStamps[i], scaling);
-            //saveMicrograph("/scratch/workdir/" + std::to_string(i) + ".jpg",
-            //        tmp);
             scaleToSize(BSPLINE3, data[i], tmp, origWidth, origHeight);
     }
 }

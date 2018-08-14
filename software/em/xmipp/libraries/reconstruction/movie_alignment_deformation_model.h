@@ -49,6 +49,9 @@ private:
 
 	int maxIterations;      // max number of iterations for shift calculation
 	FileName fnUnaligned;	// Micrograph calculated from unaligned frames
+    FileName fnGlobAligned; // Microcraph from globaly aligned frames
+    FileName fnGlobFrames;  // Where to save individual glob. correcte frames
+    FileName fnOutFrames;   // Where to save individual corrected frames
 	int upScaling;
     int threadNumbers;
     //correction images
@@ -82,11 +85,11 @@ private:
 
 	void estimateShifts(const std::vector<MultidimArray<double> >& data,
             std::vector<double>& shiftsX, std::vector<double>& shiftsY,
-            int maxIterations);
+            int maxIterations, double maxShiftTreshold);
 	void estimateLocalShifts(
             const std::vector<std::vector<MultidimArray<double> > >& partitions,
 			std::vector<double>& shiftsX, std::vector<double>& shiftsY,
-            int maxIterations);
+            int maxIterations, double maxShiftTreshold);
 	void applyShifts(std::vector<MultidimArray<double> >& data,
             const std::vector<double>& shiftsX,
             const std::vector<double>& shiftsY);
