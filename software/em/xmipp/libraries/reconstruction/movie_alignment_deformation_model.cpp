@@ -41,6 +41,11 @@ void ProgMovieAlignmentDeformationModel::readParams()
     threadNumbers = getIntParam("-j");
     fnDark = getParam("--dark");
     fnGain = getParam("--gain");
+    shiftLimit = getDoubleParam("--shiftLimit");
+    patchShiftLimit = getDoubleParam("--patchShiftLimit");
+    if (patchShiftLimit < 0) {
+        patchShiftLimit = shiftLimit;
+    }
     show();
 }
 
@@ -61,7 +66,9 @@ void ProgMovieAlignmentDeformationModel::show()
     << "Corrected frames:     " << fnOutFrames       << std::endl
     << "Threads number:       " << threadNumbers     << std::endl
     << "Dark image:           " << fnDark            << std::endl
-    << "Gain image:           " << fnGain            << std::endl;
+    << "Gain image:           " << fnGain            << std::endl
+    << "Shift limit:          " << shiftLimit        << std::endl
+    << "Patch shift limit:    " << patchShiftLimit   << std::endl;
 }
 
 void ProgMovieAlignmentDeformationModel::defineParams()
@@ -69,10 +76,10 @@ void ProgMovieAlignmentDeformationModel::defineParams()
     addUsageLine("Align a set of frames by cross-correlation of the frames");
     addParamsLine("   -i <metadata>               : Metadata with the list of frames to align");
     addParamsLine("   -o <fn=\"\"> 		          : Give the name of a micrograph to generate an aligned micrograph");
-    addParamsLine("  [--initDose <N=0>]           : Radiation dose received before first frame is taken");
+    addParamsLine("  [--initDose <s=0>]           : Radiation dose received before first frame is taken");
     addParamsLine("  [--perFrameDose <s=0>]       : Radiation dose received after imaging each frame");
-    addParamsLine("  [--maxIterations <s=20>]	  : Number of robust least squares iterations");
-    addParamsLine("  [--upscaling <N=1>]          : UpScaling coefficient for super resolution image generated from model application");
+    addParamsLine("  [--maxIterations <N=20>]	  : Number of robust least squares iterations");
+    addParamsLine("  [--upscaling <s=1>]          : UpScaling coefficient for super resolution image generated from model application");
     addParamsLine("  [--ounaligned <fn=\"\">]     : Give the name of a micrograph to generate an unaligned (initial) micrograph");
     addParamsLine("  [--oGlobAligned <fn=\"\">]   : Path to micrograph calculated from frames after just global correction");
     addParamsLine("  [--oGlobFrames <fn=\"\">]    : Where to save individual frames after global alignment");
@@ -80,6 +87,8 @@ void ProgMovieAlignmentDeformationModel::defineParams()
     addParamsLine("  [-j <N=5>]                   : Maximum threads the program is allowed to use");
     addParamsLine("  [--dark <fn=\"\">]           : Dark correction image");
     addParamsLine("  [--gain <fn=\"\">]           : Gain correction image");
+    addParamsLine("  [--shiftLimit <s=-1>         : Limits the maximal shift global alignment can calculate");
+    addParamsLine("  [--patchShiftLimit <s=-1>    : Limits the maximal shift alignment of patches can calculate (if -1 'shiftLimit' value is used");
 }
 
 void ProgMovieAlignmentDeformationModel::run()
@@ -113,7 +122,7 @@ void ProgMovieAlignmentDeformationModel::run()
 
     std::cout << "Estimating global shifts" << std::endl;
     estimateShifts(frames, globalShiftsX, globalShiftsY, maxIterations,
-            MAX_SHIFT_THRESHOLD);
+            shiftLimit);
     std::cout << "Applying global shifts" << std::endl;
     applyShifts(frames, globalShiftsX, globalShiftsY);
 
@@ -136,7 +145,7 @@ void ProgMovieAlignmentDeformationModel::run()
     partitionFrames(frames, partitions, PARTITION_COUNT);
     std::cout << "Estimating local shifts" << std::endl;
     estimateLocalShifts(partitions, localShiftsX, localShiftsY, maxIterations,
-            MAX_SHIFT_THRESHOLD);
+            patchShiftLimit);
     
     std::cout << "Estimating deformation model coefficients" << std::endl;
     calculateModelCoefficients(localShiftsX, timeStamps,

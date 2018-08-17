@@ -57,6 +57,8 @@ private:
     //correction images
 	FileName fnGain;
 	FileName fnDark;
+    double shiftLimit;      // Upper limit to estimateShifts result (Angstroem)
+    double patchShiftLimit; // Same as shiftLimit but for estimateLocalShifts
 
 	//----Internal data-----
 	std::vector<MultidimArray<double> > frames;
@@ -85,11 +87,11 @@ private:
 
 	void estimateShifts(const std::vector<MultidimArray<double> >& data,
             std::vector<double>& shiftsX, std::vector<double>& shiftsY,
-            int maxIterations, double maxShiftTreshold);
+            int maxIterations, double maxShiftTreshold, int maxShift);
 	void estimateLocalShifts(
             const std::vector<std::vector<MultidimArray<double> > >& partitions,
 			std::vector<double>& shiftsX, std::vector<double>& shiftsY,
-            int maxIterations, double maxShiftTreshold);
+            int maxIterations, double maxShiftTreshold, int maxShift);
 	void applyShifts(std::vector<MultidimArray<double> >& data,
             const std::vector<double>& shiftsX,
             const std::vector<double>& shiftsY);
