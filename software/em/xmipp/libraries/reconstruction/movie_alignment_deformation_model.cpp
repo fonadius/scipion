@@ -249,9 +249,8 @@ void ProgMovieAlignmentDeformationModel::estimateShifts(
         double maxShift = 0;
         for (int i = 0; i < data.size(); i++) {
             sum -= shiftedData[i];
-            //sum = sum / (data.size() - 1);
-            bestShift(sum, data[i], shiftX, shiftY, aux);
-            //sum = sum * (data.size() - 1);
+            bestShift(sum, data[i], shiftX, shiftY, aux, NULL,
+                    (int) maxShiftThreshold);
             sum += shiftedData[i];
 
             double maxAxis = std::max(std::abs(shiftsY[i] - shiftY),
