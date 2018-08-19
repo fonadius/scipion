@@ -264,6 +264,7 @@ void ProgMovieAlignmentDeformationModel::estimateShifts(
 
         if (maxShift <= maxShiftThreshold) {
             // if further calculated shifts are only minimal end calculation
+            std::cout << std::endl;
             std::cout << "Shift threshold reached: " << maxShift << std::endl;
             break;
         }
