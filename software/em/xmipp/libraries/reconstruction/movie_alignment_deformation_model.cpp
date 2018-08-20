@@ -87,8 +87,8 @@ void ProgMovieAlignmentDeformationModel::defineParams()
     addParamsLine("  [-j <N=5>]                   : Maximum threads the program is allowed to use");
     addParamsLine("  [--dark <fn=\"\">]           : Dark correction image");
     addParamsLine("  [--gain <fn=\"\">]           : Gain correction image");
-    addParamsLine("  [--shiftLimit <s=-1>         : Limits the maximal shift global alignment can calculate");
-    addParamsLine("  [--patchShiftLimit <s=-1>    : Limits the maximal shift alignment of patches can calculate (if -1 'shiftLimit' value is used");
+    addParamsLine("  [--shiftLimit <s=-1>]        : Limits the maximal shift global alignment can calculate");
+    addParamsLine("  [--patchShiftLimit <s=-1>]    : Limits the maximal shift alignment of patches can calculate (if -1 'shiftLimit' value is used");
 }
 
 void ProgMovieAlignmentDeformationModel::run()
