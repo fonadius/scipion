@@ -140,7 +140,6 @@ void ProgMovieAlignmentDeformationModel::run()
         averageFrames(frames, tmp);
         saveMicrograph(fnGlobAligned, tmp);
     }
-
     std::cout << "Partitioning" << std::endl;
     partitionFrames(frames, partitions, PARTITION_COUNT);
     std::cout << "Estimating local shifts" << std::endl;
@@ -249,16 +248,14 @@ void ProgMovieAlignmentDeformationModel::estimateShifts(
         double maxShift = 0;
         for (int i = 0; i < data.size(); i++) {
             sum -= shiftedData[i];
-            bestShift(sum, data[i], shiftX, shiftY, aux, NULL,
-                    (int) maxShift);
+            bestShift(sum, data[i], shiftX, shiftY, aux, NULL, (int) maxShift);
             sum += shiftedData[i];
 
-            double maxAxis = std::max(std::abs(shiftsY[i] - shiftY),
-                                      std::abs(shiftsX[i] - shiftX));
+            double maxAxis = std::max(shiftY, shiftX);
             maxShift = std::max(maxAxis, maxShift);
 
-            shiftsY[i] = shiftY;
-            shiftsX[i] = shiftX;
+            shiftsY[i] += shiftY;
+            shiftsX[i] += shiftX;
         }
 
         if (maxShift <= minShiftTermination) {
