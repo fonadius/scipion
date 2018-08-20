@@ -122,7 +122,7 @@ void ProgMovieAlignmentDeformationModel::run()
 
     std::cout << "Estimating global shifts" << std::endl;
     estimateShifts(frames, globalShiftsX, globalShiftsY, maxIterations,
-            shiftLimit);
+            MAX_SHIFT_THRESHOLD, shiftLimit);
     std::cout << "Applying global shifts" << std::endl;
     applyShifts(frames, globalShiftsX, globalShiftsY);
 
@@ -145,7 +145,7 @@ void ProgMovieAlignmentDeformationModel::run()
     partitionFrames(frames, partitions, PARTITION_COUNT);
     std::cout << "Estimating local shifts" << std::endl;
     estimateLocalShifts(partitions, localShiftsX, localShiftsY, maxIterations,
-            patchShiftLimit);
+            MAX_SHIFT_THRESHOLD, patchShiftLimit);
     
     std::cout << "Estimating deformation model coefficients" << std::endl;
     calculateModelCoefficients(localShiftsX, timeStamps,
@@ -228,7 +228,7 @@ void ProgMovieAlignmentDeformationModel::loadMovie(FileName fnMovie,
 void ProgMovieAlignmentDeformationModel::estimateShifts(
         const std::vector<MultidimArray<double> >& data,
 		std::vector<double>& shiftsX, std::vector<double>& shiftsY,
-        int maxIterations, double maxShiftThreshold)
+        int maxIterations, double minShiftTermination, double maxShift)
 {
 	// prepare sum of images
     MultidimArray<double> sum;
@@ -250,7 +250,7 @@ void ProgMovieAlignmentDeformationModel::estimateShifts(
         for (int i = 0; i < data.size(); i++) {
             sum -= shiftedData[i];
             bestShift(sum, data[i], shiftX, shiftY, aux, NULL,
-                    (int) maxShiftThreshold);
+                    (int) maxShift);
             sum += shiftedData[i];
 
             double maxAxis = std::max(std::abs(shiftsY[i] - shiftY),
@@ -261,7 +261,7 @@ void ProgMovieAlignmentDeformationModel::estimateShifts(
             shiftsX[i] = shiftX;
         }
 
-        if (maxShift <= maxShiftThreshold) {
+        if (maxShift <= minShiftTermination) {
             // if further calculated shifts are only minimal end calculation
             std::cout << std::endl;
             std::cout << "Shift threshold reached: " << maxShift << std::endl;
@@ -281,7 +281,7 @@ void ProgMovieAlignmentDeformationModel::estimateShifts(
 void ProgMovieAlignmentDeformationModel::estimateLocalShifts(
         const std::vector<std::vector<MultidimArray<double> > >& partitions,
         std::vector<double>& shiftsX, std::vector<double>& shiftsY,
-        int maxIterations, double maxShiftThreshold)
+        int maxIterations, double minShiftTermination, double maxShift)
 {
     //shiftsX and shiftsY contains shifts for all partitions []
     //shifts are organized 
@@ -293,7 +293,7 @@ void ProgMovieAlignmentDeformationModel::estimateLocalShifts(
         std::cout << "Local movement estimation for partition " << i
             << std::endl;
         estimateShifts(partitions[i], tmpXShifts, tmpYShifts, maxIterations,
-                maxShiftThreshold);
+                minShiftTermination, maxShift);
         for (int j = 0; j < partDepth; j++) {
         	shiftsX[i + j*partsPerFrame] = tmpXShifts[j];
         	shiftsY[i + j*partsPerFrame] = tmpYShifts[j];

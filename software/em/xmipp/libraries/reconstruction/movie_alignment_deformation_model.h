@@ -87,11 +87,11 @@ private:
 
 	void estimateShifts(const std::vector<MultidimArray<double> >& data,
             std::vector<double>& shiftsX, std::vector<double>& shiftsY,
-            int maxIterations, double maxShift);
+            int maxIterations, double minShiftTermination, double maxShift);
 	void estimateLocalShifts(
             const std::vector<std::vector<MultidimArray<double> > >& partitions,
 			std::vector<double>& shiftsX, std::vector<double>& shiftsY,
-            int maxIterations, double maxShift);
+            int maxIterations, double minShiftTermination, double maxShift);
 	void applyShifts(std::vector<MultidimArray<double> >& data,
             const std::vector<double>& shiftsX,
             const std::vector<double>& shiftsY);
