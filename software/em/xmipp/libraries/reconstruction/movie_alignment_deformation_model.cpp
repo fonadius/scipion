@@ -276,6 +276,12 @@ void ProgMovieAlignmentDeformationModel::estimateShifts(
         averageFrames(shiftedData, sum);
         std::cout << " .... " << maxShift << std::endl;
     }
+
+    // recalculate shifts so, first frame has shift 0
+    for (int i = 0; i < shiftsX.size(); i++) {
+        shiftsY[i] -= shiftsY[0];
+        shiftsX[i] -= shiftsX[0];
+    }
 }
 
 void ProgMovieAlignmentDeformationModel::estimateLocalShifts(
