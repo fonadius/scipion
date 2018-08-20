@@ -463,8 +463,9 @@ void ProgMovieAlignmentDeformationModel::motionCorrect(
     int origHeight = data[0].ydim;
     MultidimArray<double> tmp(origHeight * scaling, origWidth * scaling);
 	for (int i = 0; i < data.size(); i++) {
-    		revertDeformation(data[i], tmp, cx, cy, timeStamps[i], scaling);
-            scaleToSize(BSPLINE3, data[i], tmp, origWidth, origHeight);
+        std::cout << "..." << i << std::endl;
+        revertDeformation(data[i], tmp, cx, cy, timeStamps[i], scaling);
+        scaleToSize(BSPLINE3, data[i], tmp, origWidth, origHeight);
     }
 }
 
