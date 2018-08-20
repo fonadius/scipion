@@ -123,22 +123,35 @@ void ProgMovieAlignmentDeformationModel::run()
     std::cout << "Estimating global shifts" << std::endl;
     estimateShifts(frames, globalShiftsX, globalShiftsY, maxIterations,
             MAX_SHIFT_THRESHOLD, shiftLimit);
-    std::cout << "Applying global shifts" << std::endl;
-    applyShifts(frames, globalShiftsX, globalShiftsY);
+    //std::cout << "Applying global shifts" << std::endl;
+    //applyShifts(frames, globalShiftsX, globalShiftsY);
 
-    if (!fnGlobFrames.isEmpty()) { // save individual globally corrected frames
+    bool saveGlobCorFrames = !fnGlobFrames.isEmpty();
+    bool saveGlovCor = !fnGlobAligned.isEmpty();
+    if (saveGlovCor || saveGlobCorFrames) { 
+        std::cout << "Saving globally corrected data" << std::endl;
         FileName fn;
+        MultidimArray<double> corr;
+        MultidimArray<double> sum;
+        if (saveGlovCor) {
+            sum.initZeros(frames[0]);
+        }
+
         for (size_t i = 0; i < frames.size(); i++) {
             fn.compose(fnGlobFrames + "Glob", i + 1, "mrc");
             std::cout << fn << std::endl;
-            saveMicrograph(fn, frames[i]);
+		    translate(BSPLINE3, corr, data[i], vectorR2(shiftsX[i], shiftsY[i]),
+                false, 0.0);
+            if (saveGlobCorFrames) {
+                saveMicrograph(fn, frames[i]);
+            }
+            if (saveGlovCor) {
+                sum += corr;
+            }
         }
-    }
-
-    if (!fnGlobAligned.isEmpty()) { // save globaly algined average
-        MultidimArray<double> tmp;
-        averageFrames(frames, tmp);
-        saveMicrograph(fnGlobAligned, tmp);
+        if (saveGlovCor) {
+            saveMicrograph(fnGlobAligned, sum);
+        }
     }
 
     std::cout << "Partitioning" << std::endl;
