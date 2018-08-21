@@ -87,7 +87,7 @@ void ProgMovieAlignmentDeformationModel::defineParams()
     addParamsLine("  [-j <N=5>]                   : Maximum threads the program is allowed to use");
     addParamsLine("  [--dark <fn=\"\">]           : Dark correction image");
     addParamsLine("  [--gain <fn=\"\">]           : Gain correction image");
-    addParamsLine("  [--shiftLimit <s=-1>]        : Limits the maximal shift global alignment can calculate");
+    addParamsLine("  [--shiftLimit <s=200>]       : Limits the maximal shift global alignment can calculate");
     addParamsLine("  [--patchShiftLimit <s=-1>]    : Limits the maximal shift alignment of patches can calculate (if -1 'shiftLimit' value is used");
 }
 
@@ -123,6 +123,11 @@ void ProgMovieAlignmentDeformationModel::run()
     std::cout << "Estimating global shifts" << std::endl;
     estimateShifts(frames, globalShiftsX, globalShiftsY, maxIterations,
             MAX_SHIFT_THRESHOLD, shiftLimit);
+    std::cout << "Found global shifts (x, y):" << std::endl;
+    for (int i = 0; i < globalShiftsX.size(); i++) {
+        std::cout << i << ": (" << globalShiftsX[i] << ", " 
+            << globalShiftsY[i] << ")" << std::endl;
+    }
     std::cout << "Applying global shifts" << std::endl;
     applyShifts(frames, globalShiftsX, globalShiftsY);
 
@@ -244,40 +249,58 @@ void ProgMovieAlignmentDeformationModel::estimateShifts(
     double shiftX, shiftY;
     CorrelationAux aux;
     for (int cycle = 0; cycle < maxIterations; cycle++) {
-        std::cout << "Cycle: " << cycle;
-        double maxShift = 0;
+        std::cout << "Cycle: " << cycle << std::endl;
+        double topDiff = 0;
         for (int i = 0; i < data.size(); i++) {
             sum -= shiftedData[i];
-            bestShift(sum, data[i], shiftX, shiftY, aux, NULL, (int) maxShift);
+            bestShift(sum, data[i], shiftX, shiftY, aux, NULL, maxShift);
             sum += shiftedData[i];
 
-            double maxAxis = std::max(shiftY, shiftX);
-            maxShift = std::max(maxAxis, maxShift);
+            topDiff = std::max(std::max(std::abs(shiftsY[i] - shiftY),
+                        std::abs(shiftsX[i] - shiftX)),
+                    topDiff);
 
-            shiftsY[i] += shiftY;
-            shiftsX[i] += shiftX;
+            shiftsY[i] = shiftY;
+            shiftsX[i] = shiftX;
         }
 
-        if (maxShift <= minShiftTermination) {
+        // recalculate shifts so, first frame has shift 0
+        for (int i = shiftsX.size() - 1; i >= 0; i--) {
+            shiftsX[i] -= shiftsX[0];
+            shiftsY[i] -= shiftsY[0];
+        }
+
+        std::cout << "- top diff: " << topDiff << std::endl;
+
+        std::vector<double> kX = {0, 0, -5, -5, -5, 2, -12, -10, -10};
+        std::vector<double> kY = {0, -10, 2, -12, -5, -5, -5, 0, -10};
+        double sumDiff = 0;
+        for (int i = 0; i < shiftsX.size(); i++) {
+            sumDiff += std::abs(kX[i] + shiftsX[i]);
+            sumDiff += std::abs(kY[i] + shiftsY[i]);
+        }
+        std::cout << "- diff metic: " << sumDiff << ";  " << std::endl;
+
+        std::cout << "- shifts: ";
+        for (int i = 0; i < shiftsX.size(); i++) {
+            double sx = shiftsX[i];
+            double sy = shiftsY[i];
+            std::cout << "(" << sx << "," << sy << "), ";
+        }
+        std::cout << std::endl;
+
+        if (topDiff <= minShiftTermination) {
             // if further calculated shifts are only minimal end calculation
-            std::cout << std::endl;
-            std::cout << "Shift threshold reached: " << maxShift << std::endl;
+            std::cout << "Shift threshold reached: " << topDiff << std::endl;
             break;
         }
 
         // recalculate avrg
         for (int i = 0; i < data.size(); i++) {
             translate(BSPLINE3, shiftedData[i], data[i],
-                    vectorR2(shiftsX[i], shiftsY[i]), false, 0.0);
+                    vectorR2(shiftsX[i], shiftsY[i]));
         }
         averageFrames(shiftedData, sum);
-        std::cout << " .... " << maxShift << std::endl;
-    }
-
-    // recalculate shifts so, first frame has shift 0
-    for (int i = 0; i < shiftsX.size(); i++) {
-        shiftsY[i] -= shiftsY[0];
-        shiftsX[i] -= shiftsX[0];
     }
 }
 
