@@ -43,6 +43,8 @@ void ProgMovieAlignmentDeformationModel::readParams()
     fnGain = getParam("--gain");
     shiftLimit = getDoubleParam("--shiftLimit");
     patchShiftLimit = getDoubleParam("--patchShiftLimit");
+    filterCutOff = getDoubleParam("--filterCut");
+    downsample = getDoubleParam("--downsample");
     if (patchShiftLimit < 0) {
         patchShiftLimit = shiftLimit;
     }
@@ -68,7 +70,9 @@ void ProgMovieAlignmentDeformationModel::show()
     << "Dark image:           " << fnDark            << std::endl
     << "Gain image:           " << fnGain            << std::endl
     << "Shift limit:          " << shiftLimit        << std::endl
-    << "Patch shift limit:    " << patchShiftLimit   << std::endl;
+    << "Patch shift limit:    " << patchShiftLimit   << std::endl
+    << "Filter cut off freq:  " << filterCutOff      << std::endl
+    << "Downsamplin scale:    " << downsample        << std::endl;
 }
 
 void ProgMovieAlignmentDeformationModel::defineParams()
@@ -89,6 +93,8 @@ void ProgMovieAlignmentDeformationModel::defineParams()
     addParamsLine("  [--gain <fn=\"\">]           : Gain correction image");
     addParamsLine("  [--shiftLimit <s=200>]       : Limits the maximal shift global alignment can calculate");
     addParamsLine("  [--patchShiftLimit <s=-1>]    : Limits the maximal shift alignment of patches can calculate (if -1 'shiftLimit' value is used");
+    addParamsLine("  [--filterCut <s=0.05>]       : Low pass filter cut off requency");
+    addParamsLine("  [--downsample <s=2.0>]       : Downsampling scale");
 }
 
 void ProgMovieAlignmentDeformationModel::run()
@@ -176,6 +182,17 @@ void ProgMovieAlignmentDeformationModel::run()
     saveMicrograph(fnMicrograph, result);
 }
 
+void ProgMovieAlignmentDeformationModel::calcLPF(
+        double targetOccupancy, const MultidimArray<double>& lpf) {
+    double iNewXdim = 1.0 / 4096;
+    double sigma = targetOccupancy / 6; 
+    double K = -0.5 / (sigma * sigma);
+    for (int i = STARTINGX(lpf); i <= FINISHINGX(lpf); ++i) {
+        double w = i * iNewXdim;
+        A1D_ELEM(lpf, i) = exp(K * (w * w));
+    }
+}
+
 void ProgMovieAlignmentDeformationModel::loadMovie(FileName fnMovie,
         std::vector<MultidimArray<double> >& frames,
         std::vector<double>& timeStamps, FileName fnDark, FileName fnGain)
@@ -229,21 +246,71 @@ void ProgMovieAlignmentDeformationModel::loadMovie(FileName fnMovie,
     }
 }
 
+void ProgMovieAlignmentDeformationModel::scaleLPF(
+        const MultidimArray<double>& lpf, int xSize, int ySize,
+        double targetOccupancy, MultidimArray<double>& result) {
+    Matrix1D<double> w(2);
+    FOR_ALL_DIRECT_ELEMENTS_IN_ARRAY2D(result)
+    {
+        FFT_IDX2DIGFREQ(i, ySize, YY(w));
+        FFT_IDX2DIGFREQ(j, xSize, XX(w));
+        double wabs = w.module();
+        if (wabs <= targetOccupancy)
+            A2D_ELEM(result, i, j) = lpf.interpolatedElement1D(wabs * xSize);
+    }
+}
+
+void ProgMovieAlignmentDeformationModel::filterAndBinFrame(
+        MultidimArray<double>& frame, FourierFilter& filter, int xdim, int ydim)
+{
+    selfScaleToSizeFourier(xdim, ydim, frame, threadNumbers);
+    filter.applyMaskSpace(frame);
+}
+
 void ProgMovieAlignmentDeformationModel::estimateShifts(
-        const std::vector<MultidimArray<double> >& data,
+        std::vector<MultidimArray<double> >& data,
 		std::vector<double>& shiftsX, std::vector<double>& shiftsY,
         int maxIterations, double minShiftTermination, double maxShift)
 {
-	// prepare sum of images
-    MultidimArray<double> sum;
-    averageFrames(data, sum);
+    int xdim = data[0].xdim;
+    int ydim = data[0].ydim;
+    std::vector<MultidimArray<double> > filtData;
+    filtData.resize(data.size(), MultidimArray<double>(ydim, xdim));
+    for (int t = 0; t < filtData.size(); t++) {
+        FOR_ALL_DIRECT_ELEMENTS_IN_ARRAY2D(data[t]) {
+            DIRECT_A2D_ELEM(filtData[t], i, j) = DIRECT_NZYX_ELEM(data[t],
+                                                            0, 0, i, j);
+        }
+    }
+
+    FourierFilter filter;
+    filter.FilterBand=LOWPASS;
+    filter.FilterShape=RAISED_COSINE;
+    filter.w1=filterCutOff;
+    filter.generateMask(filtData[0]);
+
+    for (int i = 0; i < filtData.size(); i++) {
+        filtData[i].setXmippOrigin();
+        filterAndBinFrame(filtData[i], filter, xdim / 2, ydim / 2);
+    }
+    std::cout << "Filter applied" << std::endl;
 
     std::vector<MultidimArray<double> > shiftedData;
     shiftedData.resize(data.size());
     for (int i = 0; i < shiftedData.size(); i++) {
-        shiftedData[i].initZeros(data[i]);
-        shiftedData[i] += data[i];
+        shiftedData[i].setXmippOrigin();
+        filtData[i].setXmippOrigin();
+        shiftedData[i].initZeros(filtData[0]);
+        shiftedData[i] += filtData[i];
     }
+
+	// prepare sum of images
+    MultidimArray<double> sum;
+    averageFrames(shiftedData, sum);
+
+    saveMicrograph("/scratch/workdir/1.jpg", filtData[0]);
+    saveMicrograph("/scratch/workdir/2.jpg", filtData[1]);
+    saveMicrograph("/scratch/workdir/3.jpg", filtData[2]);
 
     // estimate the shifts
     double shiftX, shiftY;
@@ -253,22 +320,31 @@ void ProgMovieAlignmentDeformationModel::estimateShifts(
         double topDiff = 0;
         for (int i = 0; i < data.size(); i++) {
             sum -= shiftedData[i];
-            bestShift(sum, data[i], shiftX, shiftY, aux, NULL, maxShift);
-            sum += shiftedData[i];
-
+            bestShift(sum, filtData[i], shiftX, shiftY, aux, NULL, maxShift);
+            
             topDiff = std::max(std::max(std::abs(shiftsY[i] - shiftY),
                         std::abs(shiftsX[i] - shiftX)),
                     topDiff);
 
             shiftsY[i] = shiftY;
             shiftsX[i] = shiftX;
+
+            //if (i > 0) {
+                //if (i == 1) {
+                    //translate(BSPLINE3, shiftedData[0], filtData[0],
+                            //vectorR2(shiftsX[i], shiftsY[i]));
+                //}
+                translate(BSPLINE3, shiftedData[i], filtData[i],
+                        vectorR2(shiftsX[i], shiftsY[i]));
+                sum += shiftedData[i];
+            //}
         }
 
         // recalculate shifts so, first frame has shift 0
-        for (int i = shiftsX.size() - 1; i >= 0; i--) {
-            shiftsX[i] -= shiftsX[0];
-            shiftsY[i] -= shiftsY[0];
-        }
+        //for (int i = shiftsX.size() - 1; i >= 0; i--) {
+            //shiftsX[i] -= shiftsX[0];
+            //shiftsY[i] -= shiftsY[0];
+        //}
 
         std::cout << "- top diff: " << topDiff << std::endl;
 
@@ -276,8 +352,8 @@ void ProgMovieAlignmentDeformationModel::estimateShifts(
         std::vector<double> kY = {0, -10, 2, -12, -5, -5, -5, 0, -10};
         double sumDiff = 0;
         for (int i = 0; i < shiftsX.size(); i++) {
-            sumDiff += std::abs(kX[i] + shiftsX[i]);
-            sumDiff += std::abs(kY[i] + shiftsY[i]);
+            sumDiff += std::abs(kX[i] + (shiftsX[i] - shiftsX[0]));
+            sumDiff += std::abs(kY[i] + (shiftsY[i] - shiftsY[0]));
         }
         std::cout << "- diff metic: " << sumDiff << ";  " << std::endl;
 
@@ -297,15 +373,21 @@ void ProgMovieAlignmentDeformationModel::estimateShifts(
 
         // recalculate avrg
         for (int i = 0; i < data.size(); i++) {
-            translate(BSPLINE3, shiftedData[i], data[i],
-                    vectorR2(shiftsX[i], shiftsY[i]));
         }
         averageFrames(shiftedData, sum);
+    }
+
+    // recalculate shifts so, first frame has shift 0
+    for (int i = shiftsX.size() - 1; i >= 0; i--) {
+        shiftsX[i] -= shiftsX[0];
+        shiftsX[i] *= 2;
+        shiftsY[i] -= shiftsY[0];
+        shiftsY[i] *= 2;
     }
 }
 
 void ProgMovieAlignmentDeformationModel::estimateLocalShifts(
-        const std::vector<std::vector<MultidimArray<double> > >& partitions,
+        std::vector<std::vector<MultidimArray<double> > >& partitions,
         std::vector<double>& shiftsX, std::vector<double>& shiftsY,
         int maxIterations, double minShiftTermination, double maxShift)
 {

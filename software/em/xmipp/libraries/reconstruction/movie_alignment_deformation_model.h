@@ -36,6 +36,7 @@
 #include "data/metadata_extension.h"
 #include "data/xmipp_fftw.h"
 #include "data/filters.h"
+#include "reconstruction/fourier_filter.h"
 
 
 class ProgMovieAlignmentDeformationModel: public XmippProgram
@@ -46,6 +47,9 @@ private:
 	FileName fnMicrograph;	// Output micrograph
     double initDose;        // radiation dose recieved before the first frame
     double perFrameDose;    // radiation dose recieved for each imagined frame 
+
+    double filterCutOff;
+    double downsample;
 
 	int maxIterations;      // max number of iterations for shift calculation
 	FileName fnUnaligned;	// Micrograph calculated from unaligned frames
@@ -85,11 +89,17 @@ private:
             std::vector<MultidimArray<double> >& frames,
             std::vector<double>& timeStamps, FileName fnDark, FileName fnGain);
 
-	void estimateShifts(const std::vector<MultidimArray<double> >& data,
+    void calcLPF(double targetOccupancy, const MultidimArray<double>& lpf);
+    void scaleLPF(const MultidimArray<double>& lpf, int xSize, int ySize,
+            double targetOccupancyy, MultidimArray<double>& result);
+
+    void filterAndBinFrame(MultidimArray<double>& frame, FourierFilter& filter,
+            int xdim, int ydim);
+	void estimateShifts(std::vector<MultidimArray<double> >& data,
             std::vector<double>& shiftsX, std::vector<double>& shiftsY,
             int maxIterations, double minShiftTermination, double maxShift);
 	void estimateLocalShifts(
-            const std::vector<std::vector<MultidimArray<double> > >& partitions,
+            std::vector<std::vector<MultidimArray<double> > >& partitions,
 			std::vector<double>& shiftsX, std::vector<double>& shiftsY,
             int maxIterations, double minShiftTermination, double maxShift);
 	void applyShifts(std::vector<MultidimArray<double> >& data,
